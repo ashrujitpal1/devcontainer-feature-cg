@@ -1,0 +1,77 @@
+{
+  "name": "Capital Group — Java (Local Test)",
+
+  // Uses locally built base image
+  // Build first: docker build -t ghcr.io/capital-group/claude-base:latest ./layer1-base-image
+  "image": "ghcr.io/capital-group/claude-base:latest",
+
+  // Using standard community features (until CG features are published to GHCR)
+  "features": {
+    "ghcr.io/devcontainers/features/java:1": {
+      "version": "21",
+      "installMaven": "true",
+      "installGradle": "false"
+    }
+  },
+
+  "runArgs": [
+    "--cap-add=NET_ADMIN",
+    "--cap-add=NET_RAW"
+  ],
+
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "anthropic.claude-code",
+        "eamodio.gitlens",
+        "redhat.java",
+        "vscjava.vscode-java-pack",
+        "vscjava.vscode-java-debug"
+      ],
+      "settings": {
+        "editor.formatOnSave": true,
+        "terminal.integrated.defaultProfile.linux": "zsh",
+        "claudeCode.environmentVariables": [
+          { "name": "CLAUDE_CODE_USE_BEDROCK",        "value": "1" },
+          { "name": "AWS_REGION",                     "value": "us-east-1" },
+          { "name": "AWS_PROFILE",                    "value": "default" },
+          { "name": "ANTHROPIC_DEFAULT_SONNET_MODEL", "value": "us.anthropic.claude-sonnet-4-6" }
+        ],
+        "claudeCode.disableLoginPrompt": true
+      }
+    }
+  },
+
+  "containerEnv": {
+    "NODE_OPTIONS":                   "--max-old-space-size=4096",
+    "CLAUDE_CONFIG_DIR":              "/root/.claude",
+    "POWERLEVEL9K_DISABLE_GITSTATUS": "true",
+    "CLAUDE_CODE_USE_BEDROCK":        "1",
+    "AWS_REGION":                     "us-east-1",
+    "AWS_PROFILE":                    "default",
+    // Layer 3: set to local so apply-security-policy.sh uses image baseline (COPY 1)
+    // Change to "s3" once S3 bucket is set up
+    "SECURITY_POLICY_SOURCE":         "local"
+  },
+
+  "mounts": [
+    "source=cg-bashhistory-${devcontainerId},target=/commandhistory,type=volume",
+    "source=cg-claude-config-${devcontainerId},target=/root/.claude,type=volume",
+    "source=${localEnv:HOME}/.aws,target=/root/.aws,type=bind,readonly",
+    "source=${localEnv:HOME}/.gitconfig,target=/root/.gitconfig,type=bind,readonly"
+  ],
+
+  "workspaceMount": "source=${localWorkspaceFolder},target=/workspace,type=bind,consistency=delegated",
+  "workspaceFolder": "/workspace",
+  "remoteUser": "root",
+
+  // Layer 3: applies security policy at every container start
+  // Uses image baseline (COPY 1) since S3 not set up yet
+  "postStartCommand": "/usr/local/bin/apply-security-policy.sh",
+  "waitFor": "postStartCommand",
+
+  "hostRequirements": {
+    "cpus": 4,
+    "memory": "8gb"
+  }
+}

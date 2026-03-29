@@ -14,6 +14,7 @@ set -euo pipefail
 # highest priority in Claude's hierarchy, cannot be overridden by developer).
 # =============================================================================
 
+POLICY_SOURCE="${SECURITY_POLICY_SOURCE:-s3}"
 POLICY_S3_BUCKET="${SECURITY_POLICY_S3_BUCKET:-capital-group-claude-policies}"
 POLICY_S3_PREFIX="${SECURITY_POLICY_S3_PREFIX:-latest}"
 POLICY_LIVE_DIR="/tmp/cg-policy-live"
@@ -38,6 +39,13 @@ detect_languages() {
 
 # ── Step 2: Fetch COPY 2 from S3 (primary source) ────────────────────────────
 fetch_live_policy() {
+    # If source is explicitly set to local, skip S3 and use image baseline
+    if [ "$POLICY_SOURCE" = "local" ]; then
+        log "SECURITY_POLICY_SOURCE=local — using image baseline (COPY 1)"
+        echo "image-fallback"
+        return 1
+    fi
+
     mkdir -p "$POLICY_LIVE_DIR"
     log "Fetching live policy from s3://${POLICY_S3_BUCKET}/${POLICY_S3_PREFIX}/"
 
