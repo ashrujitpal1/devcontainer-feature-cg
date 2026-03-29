@@ -1,0 +1,79 @@
+name: "Release — CG Features + Policy"
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  # ── Publish Layer 2 features to GHCR ────────────────────────────────────────
+  publish-features:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      packages: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Publish Dev Container Features
+        uses: devcontainers/action@v1
+        with:
+          publish-features: "true"
+          base-path-to-features: "./src"
+          generate-docs: "true"
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # ── Build and push Layer 1 base image ───────────────────────────────────────
+  publish-base-image:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push base image (with COPY 1 baseline settings)
+        uses: docker/build-push-action@v5
+        with:
+          context: ./layer1-base-image
+          push: true
+          tags: |
+            ghcr.io/capital-group/claude-base:latest
+            ghcr.io/capital-group/claude-base:${{ github.sha }}
+
+  # ── Publish Layer 3 policy to S3 (COPY 2 — dual delivery) ───────────────────
+  publish-policy-s3:
+    runs-on: ubuntu-latest
+    needs: [publish-base-image]
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_POLICY_PUBLISH_ROLE_ARN }}
+          aws-region: us-east-1
+
+      - name: Sync Layer 3 policy to S3 (COPY 2)
+        run: |
+          aws s3 sync ./layer3-policy/ \
+            s3://capital-group-claude-policies/latest/ \
+            --delete \
+            --no-progress
+          echo "Policy published to S3 — COPY 2 updated"
+
+      - name: Verify S3 manifest
+        run: |
+          aws s3 cp s3://capital-group-claude-policies/latest/manifest.json - | jq .
