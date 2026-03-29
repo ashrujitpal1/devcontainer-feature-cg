@@ -1,13 +1,13 @@
 {
   "name": "Capital Group — Java Project",
-  "image": "ghcr.io/capital-group/claude-base:latest",
+  "image": "ghcr.io/ashrujitpal1/devcontainer-feature-cg/claude-base:latest",
   "features": {
-    "ghcr.io/capital-group/features/java:1": {
+    "ghcr.io/ashrujitpal1/devcontainer-feature-cg/java:1": {
       "version": "21",
       "installMaven": "true",
       "installGradle": "false"
     },
-    "ghcr.io/capital-group/features/approved-ide-tools-vscode:1": {}
+    "ghcr.io/ashrujitpal1/devcontainer-feature-cg/approved-ide-tools-vscode:1": {}
   },
   "runArgs": [
     "--cap-add=NET_ADMIN",

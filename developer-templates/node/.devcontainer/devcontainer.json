@@ -1,11 +1,11 @@
 {
   "name": "Capital Group — Node.js Project",
-  "image": "ghcr.io/capital-group/claude-base:latest",
+  "image": "ghcr.io/ashrujitpal1/devcontainer-feature-cg/claude-base:latest",
   "features": {
-    "ghcr.io/capital-group/features/node:1": {
+    "ghcr.io/ashrujitpal1/devcontainer-feature-cg/node:1": {
       "version": "20"
     },
-    "ghcr.io/capital-group/features/approved-ide-tools-vscode:1": {}
+    "ghcr.io/ashrujitpal1/devcontainer-feature-cg/approved-ide-tools-vscode:1": {}
   },
   "runArgs": [
     "--cap-add=NET_ADMIN",

@@ -45,9 +45,9 @@
     }
   },
   "installsAfter": [
-    "ghcr.io/capital-group/features/java",
-    "ghcr.io/capital-group/features/python",
-    "ghcr.io/capital-group/features/node",
-    "ghcr.io/capital-group/features/go"
+    "ghcr.io/ashrujitpal1/devcontainer-feature-cg/java",
+    "ghcr.io/ashrujitpal1/devcontainer-feature-cg/python",
+    "ghcr.io/ashrujitpal1/devcontainer-feature-cg/node",
+    "ghcr.io/ashrujitpal1/devcontainer-feature-cg/go"
   ]
 }
