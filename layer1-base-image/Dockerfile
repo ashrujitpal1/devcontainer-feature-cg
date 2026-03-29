@@ -65,7 +65,8 @@ USER root
 # COPY 1: Baseline managed settings — policy floor baked into image
 # These are the security controls active even when S3 is unreachable
 COPY managed-settings/ /etc/cg-managed-settings/
-RUN chmod -R 444 /etc/cg-managed-settings/
+# Directory needs 755 (traversable by all), files need 444 (read-only by all)
+RUN chmod 755 /etc/cg-managed-settings && chmod 444 /etc/cg-managed-settings/*
 
 # apply-security-policy.sh — runs at every container start (postStartCommand)
 # Fetches COPY 2 from S3, falls back to COPY 1 above if unreachable
