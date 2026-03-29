@@ -1,7 +1,7 @@
 {
   "name": "Python (Capital Group Approved)",
   "id": "python",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Installs an approved Python version with pip and optional tooling",
   "options": {
     "version": {
