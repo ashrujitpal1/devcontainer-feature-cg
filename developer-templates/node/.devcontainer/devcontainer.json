@@ -1,0 +1,64 @@
+{
+  "name": "Capital Group — Node.js Project",
+  "image": "ghcr.io/capital-group/claude-base:latest",
+  "features": {
+    "ghcr.io/capital-group/features/node:1": {
+      "version": "20"
+    },
+    "ghcr.io/capital-group/features/approved-ide-tools-vscode:1": {}
+  },
+  "runArgs": [
+    "--cap-add=NET_ADMIN",
+    "--cap-add=NET_RAW"
+  ],
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "anthropic.claude-code",
+        "eamodio.gitlens",
+        "dbaeumer.vscode-eslint",
+        "esbenp.prettier-vscode"
+      ],
+      "settings": {
+        "editor.formatOnSave": true,
+        "editor.defaultFormatter": "esbenp.prettier-vscode",
+        "editor.codeActionsOnSave": {
+          "source.fixAll.eslint": "explicit"
+        },
+        "terminal.integrated.defaultProfile.linux": "zsh",
+        "claudeCode.environmentVariables": [
+          { "name": "CLAUDE_CODE_USE_BEDROCK",          "value": "1" },
+          { "name": "AWS_REGION",                       "value": "us-east-1" },
+          { "name": "AWS_PROFILE",                      "value": "default" },
+          { "name": "ANTHROPIC_DEFAULT_SONNET_MODEL",   "value": "us.anthropic.claude-sonnet-4-6" }
+        ],
+        "claudeCode.disableLoginPrompt": true
+      }
+    }
+  },
+  "containerEnv": {
+    "NODE_OPTIONS":               "--max-old-space-size=4096",
+    "CLAUDE_CONFIG_DIR":          "/root/.claude",
+    "POWERLEVEL9K_DISABLE_GITSTATUS": "true",
+    "CLAUDE_CODE_USE_BEDROCK":    "1",
+    "AWS_REGION":                 "us-east-1",
+    "AWS_PROFILE":                "default",
+    "SECURITY_POLICY_S3_BUCKET":  "capital-group-claude-policies",
+    "SECURITY_POLICY_S3_PREFIX":  "latest"
+  },
+  "mounts": [
+    "source=cg-bashhistory-${devcontainerId},target=/commandhistory,type=volume",
+    "source=cg-claude-config-${devcontainerId},target=/root/.claude,type=volume",
+    "source=${localEnv:HOME}/.aws,target=/root/.aws,type=bind,readonly",
+    "source=${localEnv:HOME}/.gitconfig,target=/root/.gitconfig,type=bind,readonly"
+  ],
+  "workspaceMount": "source=${localWorkspaceFolder},target=/workspace,type=bind,consistency=delegated",
+  "workspaceFolder": "/workspace",
+  "remoteUser": "root",
+  "postStartCommand": "/usr/local/bin/apply-security-policy.sh",
+  "waitFor": "postStartCommand",
+  "hostRequirements": {
+    "cpus": 4,
+    "memory": "8gb"
+  }
+}

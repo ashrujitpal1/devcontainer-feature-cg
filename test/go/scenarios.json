@@ -1,0 +1,8 @@
+{
+  "basic": {
+    "image": "ghcr.io/capital-group/claude-base:latest",
+    "features": {
+      "go": { "version": "1.22" }
+    }
+  }
+}

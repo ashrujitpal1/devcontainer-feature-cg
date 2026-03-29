@@ -1,0 +1,22 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python:*)",
+      "Bash(python3:*)",
+      "Bash(pip:*)",
+      "Bash(pip3:*)",
+      "Bash(pytest:*)",
+      "Bash(poetry:*)",
+      "Bash(pipenv:*)"
+    ]
+  },
+  "fileSystemIsolation": {
+    "allowedPaths": [
+      "/workspace",
+      "/tmp",
+      "/usr/lib/python3*",
+      "/usr/local/lib/python3*",
+      "/root/.cache/pip"
+    ]
+  }
+}

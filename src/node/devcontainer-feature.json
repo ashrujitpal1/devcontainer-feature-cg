@@ -1,0 +1,33 @@
+{
+  "name": "Node.js (Capital Group Approved)",
+  "id": "node",
+  "version": "1.0.0",
+  "description": "Installs an approved Node.js LTS version",
+  "options": {
+    "version": {
+      "type": "string",
+      "enum": ["22", "20", "18"],
+      "default": "20",
+      "description": "Node.js LTS version to install"
+    },
+    "installYarn": {
+      "type": "boolean",
+      "default": false,
+      "description": "Install Yarn package manager"
+    },
+    "installPnpm": {
+      "type": "boolean",
+      "default": false,
+      "description": "Install pnpm package manager"
+    }
+  },
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "dbaeumer.vscode-eslint",
+        "esbenp.prettier-vscode"
+      ]
+    }
+  },
+  "installsAfter": []
+}

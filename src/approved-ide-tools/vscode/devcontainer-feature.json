@@ -1,0 +1,53 @@
+{
+  "name": "Approved IDE Tools — VS Code (Capital Group)",
+  "id": "approved-ide-tools-vscode",
+  "version": "1.0.0",
+  "description": "Installs Capital Group approved VS Code extensions and CLI dev tools (linters, formatters, secret scanners)",
+  "options": {
+    "installLinters": {
+      "type": "boolean",
+      "default": true,
+      "description": "Install approved linters (eslint, pylint, checkstyle)"
+    },
+    "installFormatters": {
+      "type": "boolean",
+      "default": true,
+      "description": "Install approved formatters (prettier, black)"
+    },
+    "installSecretScanner": {
+      "type": "boolean",
+      "default": true,
+      "description": "Install gitleaks for pre-commit secret scanning"
+    }
+  },
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "anthropic.claude-code",
+        "eamodio.gitlens",
+        "ms-azuretools.vscode-docker",
+        "ms-vscode.makefile-tools",
+        "streetsidesoftware.code-spell-checker"
+      ],
+      "settings": {
+        "editor.formatOnSave": true,
+        "editor.defaultFormatter": "esbenp.prettier-vscode",
+        "editor.codeActionsOnSave": {
+          "source.fixAll.eslint": "explicit"
+        },
+        "terminal.integrated.defaultProfile.linux": "zsh",
+        "terminal.integrated.profiles.linux": {
+          "zsh": { "path": "zsh" },
+          "bash": { "path": "bash", "icon": "terminal-bash" }
+        },
+        "claudeCode.disableLoginPrompt": true
+      }
+    }
+  },
+  "installsAfter": [
+    "ghcr.io/capital-group/features/java",
+    "ghcr.io/capital-group/features/python",
+    "ghcr.io/capital-group/features/node",
+    "ghcr.io/capital-group/features/go"
+  ]
+}

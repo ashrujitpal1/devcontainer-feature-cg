@@ -1,0 +1,39 @@
+{
+  "permissions": {
+    "allow": [],
+    "deny": [
+      "Bash(curl:*)",
+      "Bash(wget:*)",
+      "Bash(nc:*)",
+      "Bash(ncat:*)",
+      "Bash(ssh:*)",
+      "Bash(scp:*)",
+      "Bash(rsync:*)"
+    ]
+  },
+  "mcpServers": {
+    "httpWhitelist": [
+      "https://mcp-gateway.internal.capitalgroup.com/*"
+    ]
+  },
+  "fileSystemIsolation": {
+    "allowedPaths": [
+      "/workspace",
+      "/tmp"
+    ],
+    "deniedPaths": [
+      "/root/.aws",
+      "/etc/shadow",
+      "/etc/passwd",
+      "/etc/sudoers"
+    ]
+  },
+  "model": {
+    "provider": "bedrock",
+    "defaultModel": "us.anthropic.claude-sonnet-4-6",
+    "allowedModels": [
+      "us.anthropic.claude-sonnet-4-6",
+      "us.anthropic.claude-haiku-3-5"
+    ]
+  }
+}

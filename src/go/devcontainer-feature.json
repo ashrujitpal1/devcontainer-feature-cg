@@ -1,0 +1,22 @@
+{
+  "name": "Go (Capital Group Approved)",
+  "id": "go",
+  "version": "1.0.0",
+  "description": "Installs an approved Go version",
+  "options": {
+    "version": {
+      "type": "string",
+      "enum": ["1.22", "1.21"],
+      "default": "1.22",
+      "description": "Go version to install"
+    }
+  },
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "golang.go"
+      ]
+    }
+  },
+  "installsAfter": []
+}

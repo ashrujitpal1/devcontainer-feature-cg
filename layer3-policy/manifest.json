@@ -1,0 +1,21 @@
+{
+  "version": "1.0.0",
+  "releaseDate": "2025-01-01",
+  "releaseNotes": "Phase 1 baseline — MCP whitelist, initial deny list, file system isolation",
+  "files": [
+    "manifest.json",
+    "settings.json",
+    "settings-java.json",
+    "settings-python.json",
+    "settings-node.json",
+    "settings-go.json"
+  ],
+  "controls": {
+    "mcp-http-whitelist":    { "phase": 1, "status": "active" },
+    "deny-list":             { "phase": 1, "status": "active" },
+    "file-system-isolation": { "phase": 1, "status": "active" },
+    "tool-extension-allowlist": { "phase": 2, "status": "pending" },
+    "outbound-proxy":        { "phase": 3, "status": "pending-apex" },
+    "private-model-routes":  { "phase": 1, "status": "active" }
+  }
+}

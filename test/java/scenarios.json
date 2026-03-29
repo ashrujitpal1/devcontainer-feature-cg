@@ -1,0 +1,14 @@
+{
+  "basic": {
+    "image": "ghcr.io/capital-group/claude-base:latest",
+    "features": {
+      "java": { "version": "21", "installMaven": "true" }
+    }
+  },
+  "java17-gradle": {
+    "image": "ghcr.io/capital-group/claude-base:latest",
+    "features": {
+      "java": { "version": "17", "installMaven": "false", "installGradle": "true" }
+    }
+  }
+}

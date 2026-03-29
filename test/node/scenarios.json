@@ -1,0 +1,14 @@
+{
+  "basic": {
+    "image": "ghcr.io/capital-group/claude-base:latest",
+    "features": {
+      "node": { "version": "20" }
+    }
+  },
+  "node22-yarn": {
+    "image": "ghcr.io/capital-group/claude-base:latest",
+    "features": {
+      "node": { "version": "22", "installYarn": "true" }
+    }
+  }
+}

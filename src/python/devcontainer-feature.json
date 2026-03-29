@@ -1,0 +1,34 @@
+{
+  "name": "Python (Capital Group Approved)",
+  "id": "python",
+  "version": "1.0.0",
+  "description": "Installs an approved Python version with pip and optional tooling",
+  "options": {
+    "version": {
+      "type": "string",
+      "enum": ["3.12", "3.11", "3.10"],
+      "default": "3.12",
+      "description": "Python version to install"
+    },
+    "installPoetry": {
+      "type": "boolean",
+      "default": false,
+      "description": "Install Poetry package manager"
+    },
+    "installPipenv": {
+      "type": "boolean",
+      "default": false,
+      "description": "Install Pipenv"
+    }
+  },
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "ms-python.python",
+        "ms-python.vscode-pylance",
+        "ms-python.debugpy"
+      ]
+    }
+  },
+  "installsAfter": []
+}
