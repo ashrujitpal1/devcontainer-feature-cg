@@ -1,7 +1,7 @@
 {
   "name": "Java (Capital Group Approved)",
   "id": "java",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Installs an approved Java JDK version with Maven and/or Gradle",
   "options": {
     "version": {
