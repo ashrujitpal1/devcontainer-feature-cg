@@ -24,27 +24,39 @@ set -euo pipefail
 POLICY_SOURCE="${SECURITY_POLICY_SOURCE:-s3}"
 POLICY_S3_BUCKET="${SECURITY_POLICY_S3_BUCKET:-capital-group-claude-policies}"
 POLICY_S3_PREFIX="${SECURITY_POLICY_S3_PREFIX:-latest}"
-POLICY_BASELINE_DIR="/etc/cg-managed-settings"   # COPY 1 — always present
-POLICY_DELTA_DIR="/tmp/cg-policy-delta"           # COPY 2 — fetched from S3
-CLAUDE_MANAGED_DIR="${CLAUDE_CONFIG_DIR:-/root/.claude}"
-LOG_FILE="/tmp/cg-policy-apply.log"
+POLICY_BASELINE_DIR="/etc/cg-managed-settings"
+POLICY_DELTA_DIR="/tmp/cg-policy-delta"
 
-log()  { echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ)] $*" | tee -a "$LOG_FILE"; }
+# Resolve Claude config dir
+if [ -n "${CLAUDE_CONFIG_DIR:-}" ]; then
+    CLAUDE_MANAGED_DIR="$CLAUDE_CONFIG_DIR"
+else
+    CLAUDE_MANAGED_DIR="${HOME:-/root}/.claude"
+fi
+
+# Log file — always writable, remove stale root-owned file
+LOG_FILE="/tmp/cg-policy-apply.log"
+rm -f "$LOG_FILE" 2>/dev/null || true
+touch "$LOG_FILE" 2>/dev/null || LOG_FILE="/tmp/cg-policy-apply-$$.log"
+
+# CRITICAL: log() writes to STDERR only — never stdout
+# This prevents log lines from being captured by $() command substitution
+log()  { echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ)] $*" | tee -a "$LOG_FILE" >&2; }
 warn() { log "WARN: $*"; }
 
 # ── Step 1: Detect installed language runtimes ────────────────────────────────
+# Only prints language list to stdout — no log() calls inside
 detect_languages() {
     local langs=()
     command -v java    &>/dev/null && langs+=("java")
     command -v python3 &>/dev/null && langs+=("python")
-    command -v python  &>/dev/null && langs+=("python")
     command -v node    &>/dev/null && langs+=("node")
     command -v go      &>/dev/null && langs+=("go")
     printf '%s\n' "${langs[@]}" | sort -u | tr '\n' ',' | sed 's/,$//'
 }
 
 # ── Step 2: Fetch COPY 2 delta from S3 ───────────────────────────────────────
-# Returns: "s3" if delta fetched, "no-delta" if S3 skipped or empty/unreachable
+# Only prints "s3" or "no-delta" to stdout — all log() calls go to stderr
 fetch_delta_policy() {
     if [ "$POLICY_SOURCE" = "local" ]; then
         log "SECURITY_POLICY_SOURCE=local — skipping S3 delta fetch"
@@ -64,7 +76,6 @@ fetch_delta_policy() {
         return 0
     fi
 
-    # Check if manifest says there are delta files
     local delta_files
     delta_files=$(jq -r '.deltaFiles | length' "${POLICY_DELTA_DIR}/manifest.json" 2>/dev/null || echo "0")
 
@@ -78,15 +89,14 @@ fetch_delta_policy() {
 }
 
 # ── Step 3: Build merged settings ────────────────────────────────────────────
-# Always starts from COPY 1 (image baseline), merges COPY 2 delta on top
+# Only prints final JSON to stdout — all log() calls go to stderr
 merge_settings() {
     local delta_source="$1"
     local detected_langs="$2"
 
-    # Always start from COPY 1 — the image baseline floor
     local base_file="${POLICY_BASELINE_DIR}/settings.json"
     if [ ! -f "$base_file" ]; then
-        warn "COPY 1 baseline settings.json missing from image — this should not happen"
+        warn "COPY 1 baseline settings.json missing from image"
         return 1
     fi
 
@@ -95,34 +105,23 @@ merge_settings() {
     log "Starting from COPY 1 image baseline"
 
     # Merge COPY 2 delta on top if available
-    if [ "$delta_source" = "s3" ]; then
-        local delta_settings="${POLICY_DELTA_DIR}/settings.json"
-        if [ -f "$delta_settings" ]; then
-            log "Merging COPY 2 S3 delta settings on top of baseline"
-            merged=$(printf '%s' "$merged" | jq -s '
-                .[0] as $base | .[1] as $delta |
-                $base * $delta |
-                .permissions.allow = (($base.permissions.allow // []) + ($delta.permissions.allow // []) | unique) |
-                .permissions.deny  = (($base.permissions.deny  // []) + ($delta.permissions.deny  // []) | unique) |
-                .fileSystemIsolation.allowedPaths = (
-                    ($base.fileSystemIsolation.allowedPaths // []) +
-                    ($delta.fileSystemIsolation.allowedPaths // []) | unique
-                ) |
-                .fileSystemIsolation.deniedPaths = (
-                    ($base.fileSystemIsolation.deniedPaths // []) +
-                    ($delta.fileSystemIsolation.deniedPaths // []) | unique
-                )
-            ' - "$delta_settings")
-        fi
+    if [ "$delta_source" = "s3" ] && [ -f "${POLICY_DELTA_DIR}/settings.json" ]; then
+        log "Merging COPY 2 S3 delta settings on top of baseline"
+        merged=$(printf '%s' "$merged" | jq -s '
+            .[0] as $base | .[1] as $delta |
+            $base * $delta |
+            .permissions.allow = (($base.permissions.allow // []) + ($delta.permissions.allow // []) | unique) |
+            .permissions.deny  = (($base.permissions.deny  // []) + ($delta.permissions.deny  // []) | unique) |
+            .fileSystemIsolation.allowedPaths = (($base.fileSystemIsolation.allowedPaths // []) + ($delta.fileSystemIsolation.allowedPaths // []) | unique) |
+            .fileSystemIsolation.deniedPaths  = (($base.fileSystemIsolation.deniedPaths  // []) + ($delta.fileSystemIsolation.deniedPaths  // []) | unique)
+        ' - "${POLICY_DELTA_DIR}/settings.json")
     fi
 
     # Merge language-specific overlays
-    # Check COPY 2 delta first, fall back to COPY 1 for language overlays
     IFS=',' read -ra LANG_ARRAY <<< "$detected_langs"
     for lang in "${LANG_ARRAY[@]}"; do
         [ -z "$lang" ] && continue
 
-        # Prefer delta overlay if it exists, otherwise use image baseline overlay
         local overlay=""
         if [ "$delta_source" = "s3" ] && [ -f "${POLICY_DELTA_DIR}/settings-${lang}.json" ]; then
             overlay="${POLICY_DELTA_DIR}/settings-${lang}.json"
@@ -138,14 +137,12 @@ merge_settings() {
                 $base * $overlay |
                 .permissions.allow = (($base.permissions.allow // []) + ($overlay.permissions.allow // []) | unique) |
                 .permissions.deny  = (($base.permissions.deny  // []) + ($overlay.permissions.deny  // []) | unique) |
-                .fileSystemIsolation.allowedPaths = (
-                    ($base.fileSystemIsolation.allowedPaths // []) +
-                    ($overlay.fileSystemIsolation.allowedPaths // []) | unique
-                )
+                .fileSystemIsolation.allowedPaths = (($base.fileSystemIsolation.allowedPaths // []) + ($overlay.fileSystemIsolation.allowedPaths // []) | unique)
             ' - "$overlay")
         fi
     done
 
+    # Only this echo goes to stdout — captured by $() in main
     echo "$merged"
 }
 
@@ -153,7 +150,7 @@ merge_settings() {
 write_managed_settings() {
     local merged_json="$1"
     mkdir -p "$CLAUDE_MANAGED_DIR"
-    echo "$merged_json" | jq '.' > "${CLAUDE_MANAGED_DIR}/settings.json"
+    printf '%s' "$merged_json" | jq '.' > "${CLAUDE_MANAGED_DIR}/settings.json"
     log "Managed settings written to ${CLAUDE_MANAGED_DIR}/settings.json"
 }
 
@@ -162,14 +159,14 @@ emit_audit() {
     local delta_source="$1"
     local detected_langs="$2"
 
-    local baseline_version
-    baseline_version=$(jq -r '.version // "unknown"' \
-        "${POLICY_BASELINE_DIR}/manifest.json" 2>/dev/null || echo "unknown")
+    local baseline_version="unknown"
+    if [ -f "${POLICY_BASELINE_DIR}/manifest.json" ]; then
+        baseline_version=$(jq -r '.version // "unknown"' "${POLICY_BASELINE_DIR}/manifest.json" 2>/dev/null || echo "unknown")
+    fi
 
     local delta_version="none"
     if [ "$delta_source" = "s3" ] && [ -f "${POLICY_DELTA_DIR}/manifest.json" ]; then
-        delta_version=$(jq -r '.version // "unknown"' \
-            "${POLICY_DELTA_DIR}/manifest.json" 2>/dev/null || echo "unknown")
+        delta_version=$(jq -r '.version // "unknown"' "${POLICY_DELTA_DIR}/manifest.json" 2>/dev/null || echo "unknown")
     fi
 
     local payload
@@ -182,18 +179,12 @@ emit_audit() {
         --arg host             "$(hostname)" \
         --arg user             "$(whoami)" \
         --arg ts               "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
-        '{
-            event:           $event,
-            baselineVersion: $baseline_version,
-            deltaVersion:    $delta_version,
-            deltaSource:     $delta_source,
-            detectedLanguages: $langs,
-            host:            $host,
-            user:            $user,
-            timestamp:       $ts
-        }')
+        '{event:$event, baselineVersion:$baseline_version, deltaVersion:$delta_version,
+          deltaSource:$delta_source, detectedLanguages:$langs,
+          host:$host, user:$user, timestamp:$ts}' 2>/dev/null \
+        || echo '{"event":"cg-policy-applied","error":"audit-payload-failed"}')
 
-    log "Audit: ${payload}"
+    echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ)] Audit: $payload" | tee -a "$LOG_FILE" >&2
 
     if [ -n "${CG_AUDIT_ENDPOINT:-}" ]; then
         curl -fsSL -X POST "${CG_AUDIT_ENDPOINT}" \
@@ -213,11 +204,9 @@ main() {
     detected_langs=$(detect_languages)
     log "Detected languages: ${detected_langs:-none}"
 
-    # Fetch COPY 2 delta from S3 (may be empty at initial release)
     local delta_source
     delta_source=$(fetch_delta_policy)
 
-    # Merge: COPY 1 (image baseline) + COPY 2 (S3 delta) + language overlays
     local merged_json
     merged_json=$(merge_settings "$delta_source" "$detected_langs")
 
