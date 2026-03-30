@@ -49,7 +49,7 @@
     "CLAUDE_CODE_USE_BEDROCK":        "1",
     "AWS_REGION":                     "us-east-1",
     "AWS_PROFILE":                    "default",
-    // Layer 3: set to local so apply-security-policy.sh uses image baseline (COPY 1)
+    // Layer 3: set to local so sync-security-policy.sh uses image baseline (COPY 1)
     // Change to "s3" once S3 bucket is set up
     "SECURITY_POLICY_SOURCE":         "local"
   },
@@ -67,7 +67,7 @@
 
   // Layer 3: applies security policy at every container start
   // Uses image baseline (COPY 1) since S3 not set up yet
-  "postStartCommand": "/usr/local/bin/apply-security-policy.sh",
+  "postStartCommand": "/usr/local/bin/sync-security-policy.sh",
   "waitFor": "postStartCommand",
 
   "hostRequirements": {

@@ -83,7 +83,7 @@ Why both?
 │  - COPY 1: /etc/cg-managed-settings/ (policy floor, chmod 755/444) │
 │    ├── manifest.json      (version metadata — used for matching)    │
 │    └── settings.json      (single unified policy — all languages)   │
-│  - apply-security-policy.sh (baked in, runs at every start)        │
+│  - sync-security-policy.sh (baked in, runs at every start)        │
 │  - init-firewall.sh (best-effort egress control until Apex)        │
 │  - NO language runtimes                                             │
 └─────────────────────────────────────────────────────────────────────┘
@@ -110,7 +110,7 @@ Why both?
 │ Owner: Security Team | Changes: Biweekly/Monthly | Rebuild: NEVER  │
 │ Source: s3://capital-group-claude-policies/latest/                  │
 │                                                                     │
-│  Runs at EVERY container start via apply-security-policy.sh:        │
+│  Runs at EVERY container start via sync-security-policy.sh:        │
 │  1. Read image baseline version from manifest.json                  │
 │  2. Fetch S3 delta manifest — check deltaReleases                   │
 │  3. Version match: download only deltas with version > baseline     │
@@ -137,7 +137,7 @@ graph TB
         subgraph DC["Dev Container"]
             L1["Layer 1: Base Image\nghcr.io/ashrujitpal1/devcontainer-feature-cg/claude-base:1.0.0\nContains: COPY 1 full baseline policy (single unified settings.json)"]
             L2["Layer 2: Features\nJava / Python / Node / Go\nghcr.io/ashrujitpal1/devcontainer-feature-cg/<feature>:1"]
-            L3["Layer 3: apply-security-policy.sh\npostStartCommand — runs every start\nVersion-matches and merges COPY1 + applicable S3 deltas"]
+            L3["Layer 3: sync-security-policy.sh\npostStartCommand — runs every start\nVersion-matches and merges COPY1 + applicable S3 deltas"]
             CC["Claude Code CLI"]
             MS["~/.claude/settings.json\nManaged Policy — highest priority\nWritten fresh at every start"]
         end
@@ -195,7 +195,7 @@ flowchart TD
 
     COPY2 --> S3_NOTE["S3 is the DELTA SOURCE\nEach release = separate versioned file\nNever overwritten\nDeveloper gets on next container START"]
 
-    IMG_NOTE --> RUNTIME["Container Start\napply-security-policy.sh"]
+    IMG_NOTE --> RUNTIME["Container Start\nsync-security-policy.sh"]
     S3_NOTE --> RUNTIME
 
     RUNTIME --> STEP1["Step 1: Read image baseline version\nfrom /etc/cg-managed-settings/manifest.json"]
@@ -275,7 +275,7 @@ graph LR
 ```mermaid
 graph TB
     subgraph HIERARCHY["Claude Code Settings Hierarchy — Highest to Lowest Priority"]
-        M["1. Managed Settings\n~/.claude/settings.json\nWritten by apply-security-policy.sh at every start\nSource: COPY1 merged with applicable S3 deltas\nCannot be overridden by anything below"]
+        M["1. Managed Settings\n~/.claude/settings.json\nWritten by sync-security-policy.sh at every start\nSource: COPY1 merged with applicable S3 deltas\nCannot be overridden by anything below"]
         L["2. Local User Settings\n~/.claude/settings.local.json\nDeveloper personal preferences"]
         P["3. Project Settings\n.claude/settings.json in repo\nProject-specific permissions"]
         PL["4. Project Local Settings\n.claude/settings.local.json in repo\nLowest priority"]
@@ -288,7 +288,7 @@ graph TB
     subgraph DELIVERY["How Managed Settings Are Built"]
         C1["COPY 1: /etc/cg-managed-settings/settings.json\nSingle unified policy — always the starting point"]
         C2["COPY 2: S3 versioned deltas\ndelta-X.Y.Z.json files\nOnly versions > baseline applied"]
-        SCRIPT["apply-security-policy.sh\nRuns at every container start\nVersion-matches and merges in order"]
+        SCRIPT["sync-security-policy.sh\nRuns at every container start\nVersion-matches and merges in order"]
     end
 
     C1 -->|"base"| SCRIPT
@@ -316,7 +316,7 @@ sequenceDiagram
     REG-->>DD: Image layers (incremental pull)
     DD->>DC: Apply Layer 2 features (java/python/node — cached after first build)
     DC->>DC: Container starts
-    DC->>DC: postStartCommand → apply-security-policy.sh
+    DC->>DC: postStartCommand → sync-security-policy.sh
     DC->>DC: Read baseline version from manifest.json (e.g. v1.0.0)
     DC->>S3: Fetch manifest.json (check deltaReleases)
     alt No deltas > baseline version

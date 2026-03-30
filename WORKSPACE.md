@@ -24,7 +24,7 @@ devcontainer-feature-cg/
 │   │   ├── manifest.json       ← Baseline version metadata (used for version matching)
 │   │   └── settings.json       ← Single unified policy (all languages, all controls)
 │   └── scripts/
-│       ├── apply-security-policy.sh  ← Runs at every container start
+│       ├── sync-security-policy.sh  ← Runs at every container start
 │       └── init-firewall.sh          ← Best-effort egress firewall
 │
 ├── src/                        ← Layer 2: Dev Container Features source
@@ -121,7 +121,7 @@ Current controls:
 - `fileSystemIsolation.deniedPaths` — `/root/.aws`, `/etc/shadow`, `/etc/passwd`, `/etc/sudoers`
 - `model.allowedModels` — only `us.anthropic.claude-sonnet-4-6` and `us.anthropic.claude-haiku-3-5`
 
-### layer1-base-image/scripts/apply-security-policy.sh
+### layer1-base-image/scripts/sync-security-policy.sh
 
 The most critical script in the entire system. Runs at every container start via `postStartCommand`.
 
@@ -168,7 +168,7 @@ When security team adds new controls:
 What developers copy into their project repos. Contains:
 - `image` — points to `ghcr.io/ashrujitpal1/devcontainer-feature-cg/claude-base:1.0.0` (pinned to version)
 - `features` — Capital Group approved features for the language stack
-- `postStartCommand` — `/usr/local/bin/apply-security-policy.sh`
+- `postStartCommand` — `/usr/local/bin/sync-security-policy.sh`
 - `containerEnv` — Bedrock config, S3 bucket reference
 - `mounts` — `~/.aws` (read-only), `~/.gitconfig` (read-only), named volumes for history and Claude config
 

@@ -130,7 +130,7 @@ docker run --rm --user root \
   -e CLAUDE_CONFIG_DIR=/root/.claude \
   -e SECURITY_POLICY_SOURCE=local \
   ghcr.io/<your-github-username>/devcontainer-feature-cg/claude-base:1.0.0 \
-  /bin/bash -c "/usr/local/bin/apply-security-policy.sh && echo SUCCESS"
+  /bin/bash -c "/usr/local/bin/sync-security-policy.sh && echo SUCCESS"
 ```
 
 Expected: Script runs, prints log lines to stderr, exits 0.
@@ -239,7 +239,7 @@ VS Code will:
 1. Pull `claude-base:1.0.0` from GHCR (~30s first time, instant if cached)
 2. Install language features (~2-3 min first time, cached after)
 3. Start container
-4. Run `apply-security-policy.sh` (~5s)
+4. Run `sync-security-policy.sh` (~5s)
 5. Open workspace
 
 Total: ~3-5 min first time, ~30-50s subsequent launches.
@@ -260,7 +260,7 @@ mvn --version
 cat /root/.claude/settings.json | jq '{deny_count: .permissions.deny|length}'
 
 # Check policy apply log
-cat /tmp/cg-policy-apply.log
+cat /tmp/cg-policy-sync.log
 
 # Verify AWS credentials work
 aws sts get-caller-identity
@@ -395,7 +395,7 @@ Developers get the new feature version on their **next Rebuild**.
 Check the policy apply log:
 ```bash
 # In the container terminal
-cat /tmp/cg-policy-apply.log
+cat /tmp/cg-policy-sync.log
 ```
 
 Common causes:
@@ -487,7 +487,7 @@ aws s3 cp ./layer3-policy/manifest.json s3://capital-group-claude-policies/lates
 
 ### Test policy script locally
 ```bash
-docker run --rm --user root -e CLAUDE_CONFIG_DIR=/root/.claude -e SECURITY_POLICY_SOURCE=local ghcr.io/<user>/devcontainer-feature-cg/claude-base:1.0.0 /bin/bash -c "/usr/local/bin/apply-security-policy.sh && cat /root/.claude/settings.json | jq ."
+docker run --rm --user root -e CLAUDE_CONFIG_DIR=/root/.claude -e SECURITY_POLICY_SOURCE=local ghcr.io/<user>/devcontainer-feature-cg/claude-base:1.0.0 /bin/bash -c "/usr/local/bin/sync-security-policy.sh && cat /root/.claude/settings.json | jq ."
 ```
 
 ### Check what's in S3

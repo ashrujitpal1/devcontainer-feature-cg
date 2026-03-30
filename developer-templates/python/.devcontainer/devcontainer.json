@@ -54,7 +54,7 @@
   "workspaceMount": "source=${localWorkspaceFolder},target=/workspace,type=bind,consistency=delegated",
   "workspaceFolder": "/workspace",
   "remoteUser": "root",
-  "postStartCommand": "/usr/local/bin/apply-security-policy.sh",
+  "postStartCommand": "/usr/local/bin/sync-security-policy.sh",
   "waitFor": "postStartCommand",
   "hostRequirements": {
     "cpus": 4,

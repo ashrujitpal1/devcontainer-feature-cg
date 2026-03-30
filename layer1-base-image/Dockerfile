@@ -68,10 +68,10 @@ COPY managed-settings/ /etc/cg-managed-settings/
 # Directory needs 755 (traversable by all), files need 444 (read-only by all)
 RUN chmod 755 /etc/cg-managed-settings && chmod 444 /etc/cg-managed-settings/*
 
-# apply-security-policy.sh — runs at every container start (postStartCommand)
+# sync-security-policy.sh — runs at every container start (postStartCommand)
 # Fetches COPY 2 from S3, falls back to COPY 1 above if unreachable
-COPY scripts/apply-security-policy.sh /usr/local/bin/apply-security-policy.sh
-RUN chmod +x /usr/local/bin/apply-security-policy.sh
+COPY scripts/sync-security-policy.sh /usr/local/bin/sync-security-policy.sh
+RUN chmod +x /usr/local/bin/sync-security-policy.sh
 
 # init-firewall.sh — best-effort egress control (until Apex)
 COPY scripts/init-firewall.sh /usr/local/bin/init-firewall.sh

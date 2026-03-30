@@ -2,7 +2,7 @@
 set -euo pipefail
 
 # =============================================================================
-# apply-security-policy.sh
+# sync-security-policy.sh
 #
 # Layer 3 — runs at EVERY container start via postStartCommand.
 #
@@ -31,9 +31,9 @@ else
     CLAUDE_MANAGED_DIR="${HOME:-/root}/.claude"
 fi
 
-LOG_FILE="/tmp/cg-policy-apply.log"
+LOG_FILE="/tmp/cg-policy-sync.log"
 rm -f "$LOG_FILE" 2>/dev/null || true
-touch "$LOG_FILE" 2>/dev/null || LOG_FILE="/tmp/cg-policy-apply-$$.log"
+touch "$LOG_FILE" 2>/dev/null || LOG_FILE="/tmp/cg-policy-sync-$$.log"
 
 log()  { echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ)] $*" | tee -a "$LOG_FILE" >&2; }
 warn() { log "WARN: $*"; }
