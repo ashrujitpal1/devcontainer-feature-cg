@@ -1,6 +1,6 @@
 {
   "name": "Capital Group — Node.js Project",
-  "image": "ghcr.io/ashrujitpal1/devcontainer-feature-cg/claude-base:latest",
+  "image": "ghcr.io/ashrujitpal1/devcontainer-feature-cg/claude-base:1.0.0",
   "features": {
     "ghcr.io/ashrujitpal1/devcontainer-feature-cg/node:1": {
       "version": "20"

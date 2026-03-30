@@ -1,12 +1,12 @@
 {
   "basic": {
-    "image": "ghcr.io/capital-group/claude-base:latest",
+    "image": "ghcr.io/ashrujitpal1/devcontainer-feature-cg/claude-base:latest",
     "features": {
       "python": { "version": "3.12" }
     }
   },
   "python311-poetry": {
-    "image": "ghcr.io/capital-group/claude-base:latest",
+    "image": "ghcr.io/ashrujitpal1/devcontainer-feature-cg/claude-base:latest",
     "features": {
       "python": { "version": "3.11", "installPoetry": "true" }
     }

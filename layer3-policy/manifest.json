@@ -1,15 +1,4 @@
 {
-  "version": "1.0.0",
-  "releaseDate": "2025-01-01",
-  "releaseNotes": "Phase 1 baseline — initial release. No delta controls. Image baseline (COPY 1) is the full policy.",
-  "imageBaselineVersion": "1.0.0",
-  "deltaFiles": [],
-  "controls": {
-    "mcp-http-whitelist":       { "phase": 1, "status": "active",       "deliveredIn": "image" },
-    "deny-list":                { "phase": 1, "status": "active",       "deliveredIn": "image" },
-    "file-system-isolation":    { "phase": 1, "status": "active",       "deliveredIn": "image" },
-    "tool-extension-allowlist": { "phase": 2, "status": "pending",      "deliveredIn": "tbd" },
-    "outbound-proxy":           { "phase": 3, "status": "pending-apex", "deliveredIn": "tbd" },
-    "private-model-routes":     { "phase": 1, "status": "active",       "deliveredIn": "image" }
-  }
+  "description": "S3 delta policy manifest — each release is a separate versioned file. The postStartCommand fetches only deltas with version higher than the image baseline.",
+  "deltaReleases": []
 }

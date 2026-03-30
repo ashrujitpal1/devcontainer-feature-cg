@@ -1,6 +1,6 @@
 {
   "name": "Capital Group — Fullstack (Java + Python + Node)",
-  "image": "ghcr.io/ashrujitpal1/devcontainer-feature-cg/claude-base:latest",
+  "image": "ghcr.io/ashrujitpal1/devcontainer-feature-cg/claude-base:1.0.0",
   "features": {
     "ghcr.io/ashrujitpal1/devcontainer-feature-cg/java:1": {
       "version": "21",

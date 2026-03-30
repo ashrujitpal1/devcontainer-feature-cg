@@ -19,7 +19,7 @@ jobs:
           - go
           - approved-ide-tools-vscode
         baseImage:
-          - ghcr.io/capital-group/claude-base:latest
+          - ghcr.io/ashrujitpal1/devcontainer-feature-cg/claude-base:latest
     steps:
       - uses: actions/checkout@v4
 

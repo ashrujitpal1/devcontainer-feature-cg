@@ -4,7 +4,7 @@
 
 This document describes the architecture for rolling out Claude Code via Dev Containers
 at Capital Group. It covers the 3-layer design, security control enforcement, dual-delivery
-policy mechanism, multi-language support, and the developer experience.
+policy mechanism, and the developer experience.
 
 **Implementation Status:** Phase 1 complete and validated.
 **Registry:** `ghcr.io/ashrujitpal1/devcontainer-feature-cg`
@@ -18,13 +18,14 @@ policy mechanism, multi-language support, and the developer experience.
 
 1. Security policy is delivered by design, not by developer cooperation
 2. Developer workflow (Rebuild and Reopen in Container) is never disrupted
-3. Security controls are maintained in TWO places simultaneously — image baseline AND S3 delta
-4. S3 holds DELTA only — new controls added since last image build (not a full copy)
+3. Security controls are maintained in TWO places simultaneously — image baseline AND S3 versioned deltas
+4. S3 holds VERSIONED DELTAS only — each release is a separate file, never overwritten
 5. Image holds the FULL baseline — always the policy floor, works even when S3 is unreachable
-6. Security controls update without forcing image rebuilds on developers
+6. Version matching ensures only deltas newer than the image baseline are applied
 7. Container ready time stays under 1 minute
 8. Developers choose their languages freely within approved boundaries
-9. Two enforcement surfaces that Capital Group owns: Claude Managed Settings + Bedrock IAM
+9. Single unified policy — no language-specific settings files
+10. Two enforcement surfaces that Capital Group owns: Claude Managed Settings + Bedrock IAM
 
 ---
 
@@ -42,8 +43,8 @@ Security Team commits new control
        ▼               ▼
 Layer 1 Image       S3 Bucket
 managed-settings/   layer3-policy/
-(updated baseline)  (delta only — new controls
-                     since last image build)
+settings.json       delta-X.Y.Z.json (versioned, never overwritten)
+(updated baseline)
 
 Baked into the      Fetched at every
 next image build    container start
@@ -51,16 +52,19 @@ Acts as the         Acts as the
 policy FLOOR        policy DELTA SOURCE
 ```
 
-**Critical distinction:**
-- S3 does NOT hold a full copy of all settings — it holds only the DELTA (new controls)
-- At runtime: `merged result = COPY 1 (image baseline) + COPY 2 (S3 delta)`
-- At v1.0.0 initial release: S3 delta is empty (`deltaFiles: []`) — image baseline is the full policy
+**Critical distinctions:**
+- S3 does NOT hold a full copy — it holds only VERSIONED DELTAS (one file per release)
+- Each delta file is named `delta-X.Y.Z.json` and is never overwritten
+- At runtime: `merged result = COPY 1 (image baseline) + applicable S3 deltas (version > baseline)`
+- Version matching: script reads image baseline version from manifest.json, fetches only deltas with higher version
+- At v1.0.0 initial release: S3 deltaReleases is empty — image baseline is the full policy
+- Single unified policy — all language permissions are in one `settings.json`
 
 Why both?
 
 - S3 alone: if S3 is unreachable, developer gets NO policy
 - Image alone: developer must rebuild to get new controls — violates "upon launching" requirement
-- Both together: S3 delivers freshness (delta), image delivers resilience (full baseline)
+- Both together: S3 delivers freshness (versioned deltas), image delivers resilience (full baseline)
 
 ---
 
@@ -77,12 +81,8 @@ Why both?
 │  - Claude Code CLI (latest)                                         │
 │  - git-delta, zsh-in-docker (Powerlevel10k)                        │
 │  - COPY 1: /etc/cg-managed-settings/ (policy floor, chmod 755/444) │
-│    ├── manifest.json      (version metadata)                        │
-│    ├── settings.json      (base policy — all developers)            │
-│    ├── settings-java.json (Java overlay)                            │
-│    ├── settings-python.json (Python overlay)                        │
-│    ├── settings-node.json (Node overlay)                            │
-│    └── settings-go.json   (Go overlay)                              │
+│    ├── manifest.json      (version metadata — used for matching)    │
+│    └── settings.json      (single unified policy — all languages)   │
 │  - apply-security-policy.sh (baked in, runs at every start)        │
 │  - init-firewall.sh (best-effort egress control until Apex)        │
 │  - NO language runtimes                                             │
@@ -111,17 +111,17 @@ Why both?
 │ Source: s3://capital-group-claude-policies/latest/                  │
 │                                                                     │
 │  Runs at EVERY container start via apply-security-policy.sh:        │
-│  1. Detect installed language runtimes (java, python, node, go)     │
-│  2. Fetch S3 delta manifest — check deltaFiles count                │
-│     - deltaFiles = 0 → use image baseline only (COPY 1)            │
-│     - deltaFiles > 0 → merge delta on top of baseline              │
-│  3. Merge COPY 1 + COPY 2 delta + language-specific overlays       │
-│  4. Write to ~/.claude/settings.json (Claude managed path)          │
+│  1. Read image baseline version from manifest.json                  │
+│  2. Fetch S3 delta manifest — check deltaReleases                   │
+│  3. Version match: download only deltas with version > baseline     │
+│  4. Merge COPY 1 + applicable deltas (in version order)             │
+│  5. Write to ~/.claude/settings.json (Claude managed path)          │
 │     → Highest priority — cannot be overridden by developer          │
-│  5. Emit audit event (policy version, source, languages detected)   │
+│  6. Emit audit event (baseline version, delta versions applied)     │
 │                                                                     │
-│  Key implementation note: log() writes to STDERR only to prevent   │
-│  log lines from polluting JSON captured by $() substitution         │
+│  Key: each delta is a separate file (delta-X.Y.Z.json), never      │
+│  overwritten. If developer hasn't rebuilt, ALL missed deltas are    │
+│  applied in order.                                                  │
 └─────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -135,17 +135,17 @@ graph TB
         VS["VS Code\n'Rebuild and Reopen in Container'"]
         DD["Docker Desktop"]
         subgraph DC["Dev Container"]
-            L1["Layer 1: Base Image\nghcr.io/ashrujitpal1/devcontainer-feature-cg/claude-base:latest\nContains: COPY 1 full baseline policy"]
+            L1["Layer 1: Base Image\nghcr.io/ashrujitpal1/devcontainer-feature-cg/claude-base:1.0.0\nContains: COPY 1 full baseline policy (single unified settings.json)"]
             L2["Layer 2: Features\nJava / Python / Node / Go\nghcr.io/ashrujitpal1/devcontainer-feature-cg/<feature>:1"]
-            L3["Layer 3: apply-security-policy.sh\npostStartCommand — runs every start\nMerges COPY1 + COPY2 delta"]
+            L3["Layer 3: apply-security-policy.sh\npostStartCommand — runs every start\nVersion-matches and merges COPY1 + applicable S3 deltas"]
             CC["Claude Code CLI"]
             MS["~/.claude/settings.json\nManaged Policy — highest priority\nWritten fresh at every start"]
         end
     end
 
     subgraph POLICY_SOURCES["Policy Sources — Dual Delivery"]
-        S3["S3 Bucket\ncapital-group-claude-policies/latest/\nCOPY 2 — Delta only\nNew controls since last image build"]
-        IMG_POL["Image Baseline /etc/cg-managed-settings/\nCOPY 1 — Full policy floor\nAlways present, works offline"]
+        S3["S3 Bucket\ncapital-group-claude-policies/latest/\nVersioned deltas — one file per release\nOnly deltas > image version applied"]
+        IMG_POL["Image Baseline /etc/cg-managed-settings/\nCOPY 1 — Single unified policy\nAlways present, works offline"]
     end
 
     subgraph AWS["AWS (Account: 696072349808)"]
@@ -157,22 +157,18 @@ graph TB
 
     subgraph CICD["CI/CD Pipeline (GitHub Actions)\nghcr.io/ashrujitpal1/devcontainer-feature-cg"]
         SEC_COMMIT["Security Team Commits\nNew Control"]
-        IMG_BUILD["Base Image Build\nUpdates COPY 1 in image\n+ language overlays"]
-        S3_PUBLISH["Policy Publish\nUpdates COPY 2 delta in S3\nmanifest.json + delta files only"]
+        IMG_BUILD["Base Image Build\nUpdates settings.json in image\nBumps manifest version"]
+        S3_PUBLISH["Policy Publish\nAdds new delta-X.Y.Z.json to S3\nUpdates manifest deltaReleases"]
         REG["Container Registry\nghcr.io/ashrujitpal1"]
-    end
-
-    subgraph APEX["Apex Gateway (Future)"]
-        GW["MCP Gateway\nOutbound Proxy\nPrivate Model Routes"]
     end
 
     VS --> DD --> DC
     SEC_COMMIT -->|"triggers"| IMG_BUILD
     SEC_COMMIT -->|"triggers"| S3_PUBLISH
     IMG_BUILD -->|"push image with new baseline"| REG
-    S3_PUBLISH -->|"aws s3 sync delta only"| S3
+    S3_PUBLISH -->|"aws s3 cp delta file + manifest"| S3
     REG -->|"docker pull"| L1
-    L3 -->|"1. fetch S3 delta manifest"| S3
+    L3 -->|"1. fetch S3 manifest, version-match"| S3
     L3 -->|"2. always start from"| IMG_POL
     L3 -->|"3. write merged result"| MS
     MS -->|"enforces controls"| CC
@@ -180,42 +176,61 @@ graph TB
     BEDROCK --> IAM
     BEDROCK --> CT
     BEDROCK --> CW
-    CC -.->|"future routing"| GW
-    GW -.->|"future"| BEDROCK
 ```
 
 ---
 
-## Phase 3: Dual-Delivery Policy Mechanism (Core Design)
+## Phase 3: Versioned Delta Policy Mechanism (Core Design)
 
 ```mermaid
 flowchart TD
     SEC["Security Team\nCommits new control to policy repo"]
     SEC --> CICD["CI/CD Pipeline triggers"]
 
-    CICD --> COPY1["Update COPY 1\nAdd new control to managed-settings/settings.json\nRebuild base image\nPush to GHCR"]
+    CICD --> COPY1["Update COPY 1\nAdd new control to settings.json\nBump manifest version to X.Y.Z\nRebuild base image\nPush to GHCR"]
 
-    CICD --> COPY2["Update COPY 2\nAdd delta file to layer3-policy/\nUpdate manifest.json deltaFiles list\nSync to S3"]
+    CICD --> COPY2["Update COPY 2\nCreate delta-X.Y.Z.json with new controls\nAdd entry to manifest.json deltaReleases\nSync to S3"]
 
-    COPY1 --> IMG_NOTE["Image is the FLOOR\nFull baseline always present\nWorks even when S3 is down\nUpdated monthly"]
+    COPY1 --> IMG_NOTE["Image is the FLOOR\nSingle unified policy\nWorks even when S3 is down\nUpdated monthly"]
 
-    COPY2 --> S3_NOTE["S3 is the DELTA SOURCE\nOnly new controls since last image build\nDeveloper gets on next container START\nNo rebuild needed"]
+    COPY2 --> S3_NOTE["S3 is the DELTA SOURCE\nEach release = separate versioned file\nNever overwritten\nDeveloper gets on next container START"]
 
     IMG_NOTE --> RUNTIME["Container Start\napply-security-policy.sh"]
     S3_NOTE --> RUNTIME
 
-    RUNTIME --> STEP1["Step 1: Load COPY 1\nimage baseline as starting point"]
-    STEP1 --> STEP2["Step 2: Fetch S3 manifest\nCheck deltaFiles count"]
-    STEP2 --> DECISION{deltaFiles > 0?}
+    RUNTIME --> STEP1["Step 1: Read image baseline version\nfrom /etc/cg-managed-settings/manifest.json"]
+    STEP1 --> STEP2["Step 2: Fetch S3 manifest\nCheck deltaReleases"]
+    STEP2 --> DECISION{Any delta version > baseline?}
 
-    DECISION -->|"Yes"| MERGE_DELTA["Merge COPY 2 delta\non top of baseline"]
-    DECISION -->|"No / S3 unreachable"| BASELINE_ONLY["Use image baseline only\nAudit: source=no-delta or S3-fail"]
+    DECISION -->|"Yes"| DOWNLOAD["Download only applicable deltas\n(version > baseline)"]
+    DECISION -->|"No / S3 unreachable"| BASELINE_ONLY["Use image baseline only\nAudit: source=no-delta"]
 
-    MERGE_DELTA --> LANG["Merge language overlays\n(java/python/node/go detected)"]
-    BASELINE_ONLY --> LANG
+    DOWNLOAD --> MERGE["Merge deltas in version order\non top of baseline"]
+    MERGE --> WRITE["Write ~/.claude/settings.json\nManaged path — highest priority"]
+    BASELINE_ONLY --> WRITE
 
-    LANG --> WRITE["Write ~/.claude/settings.json\nManaged path — highest priority\nDeveloper cannot override"]
-    WRITE --> AUDIT["Emit audit event\nbaselineVersion + deltaVersion\ndetectedLanguages + source"]
+    WRITE --> AUDIT["Emit audit event\nbaselineVersion + highest delta applied"]
+```
+
+### Example: Version Matching in Action
+
+```
+Image baseline version: 1.0.0
+
+S3 manifest deltaReleases:
+  - delta-1.1.0.json  (version: 1.1.0)  → 1.1.0 > 1.0.0 ✅ APPLY
+  - delta-1.2.0.json  (version: 1.2.0)  → 1.2.0 > 1.0.0 ✅ APPLY
+  - delta-1.3.0.json  (version: 1.3.0)  → 1.3.0 > 1.0.0 ✅ APPLY
+
+Developer rebuilds image → new baseline version: 1.3.0
+
+Next container start:
+  - delta-1.1.0.json  (version: 1.1.0)  → 1.1.0 > 1.3.0 ❌ SKIP (already in baseline)
+  - delta-1.2.0.json  (version: 1.2.0)  → 1.2.0 > 1.3.0 ❌ SKIP (already in baseline)
+  - delta-1.3.0.json  (version: 1.3.0)  → 1.3.0 > 1.3.0 ❌ SKIP (already in baseline)
+
+Security team releases 1.4.0:
+  - delta-1.4.0.json  (version: 1.4.0)  → 1.4.0 > 1.3.0 ✅ APPLY
 ```
 
 ---
@@ -234,15 +249,14 @@ graph LR
     end
 
     subgraph DELIVERY["Dual Delivery"]
-        D1["COPY 1\nImage baseline\n/etc/cg-managed-settings/\nFull policy floor"]
-        D2["COPY 2\nS3 delta\ns3://capital-group-claude-policies/latest/\nNew controls only"]
+        D1["COPY 1\nImage baseline\n/etc/cg-managed-settings/settings.json\nSingle unified policy"]
+        D2["COPY 2\nS3 versioned deltas\ns3://capital-group-claude-policies/latest/\ndelta-X.Y.Z.json files"]
     end
 
     subgraph ENFORCEMENT["Enforcement Surface"]
         MS["Claude Managed Settings\n~/.claude/settings.json\nHighest priority in Claude hierarchy\nCannot be overridden by developer"]
         IAM["Bedrock IAM Policy\nServer-side\nDeveloper cannot change\nAccount: 696072349808"]
         FW["Container iptables\nBest-effort until Apex\ninit-firewall.sh"]
-        APEX["Apex Gateway\nFuture enforcement"]
     end
 
     C1 --> D1 & D2 -->|"mcpServers.httpWhitelist"| MS
@@ -250,7 +264,6 @@ graph LR
     C3 --> D1 & D2 -->|"fileSystemIsolation"| MS
     C4 --> D1 & D2 -->|"permissions.allow — Phase 2"| MS
     C5 -->|"best-effort today"| FW
-    C5 -.->|"enforced when ready"| APEX
     C6 -->|"model ARN restriction"| IAM
     C6 --> D1 & D2 -->|"model config"| MS
 ```
@@ -262,7 +275,7 @@ graph LR
 ```mermaid
 graph TB
     subgraph HIERARCHY["Claude Code Settings Hierarchy — Highest to Lowest Priority"]
-        M["1. Managed Settings\n~/.claude/settings.json\nWritten by apply-security-policy.sh at every start\nSource: COPY1 merged with COPY2 delta\nCannot be overridden by anything below"]
+        M["1. Managed Settings\n~/.claude/settings.json\nWritten by apply-security-policy.sh at every start\nSource: COPY1 merged with applicable S3 deltas\nCannot be overridden by anything below"]
         L["2. Local User Settings\n~/.claude/settings.local.json\nDeveloper personal preferences"]
         P["3. Project Settings\n.claude/settings.json in repo\nProject-specific permissions"]
         PL["4. Project Local Settings\n.claude/settings.local.json in repo\nLowest priority"]
@@ -273,15 +286,13 @@ graph TB
     P -->|"overrides"| PL
 
     subgraph DELIVERY["How Managed Settings Are Built"]
-        C1["COPY 1: /etc/cg-managed-settings/settings.json\nFull baseline — always the starting point"]
-        C2["COPY 2: S3 delta settings.json\nNew controls only — merged on top"]
-        LANG["Language overlays\nsettings-java/python/node/go.json\nAuto-detected at runtime"]
-        SCRIPT["apply-security-policy.sh\nRuns at every container start\nlog() → stderr only (critical)"]
+        C1["COPY 1: /etc/cg-managed-settings/settings.json\nSingle unified policy — always the starting point"]
+        C2["COPY 2: S3 versioned deltas\ndelta-X.Y.Z.json files\nOnly versions > baseline applied"]
+        SCRIPT["apply-security-policy.sh\nRuns at every container start\nVersion-matches and merges in order"]
     end
 
     C1 -->|"base"| SCRIPT
-    C2 -->|"delta merged on top"| SCRIPT
-    LANG -->|"language-aware merge"| SCRIPT
+    C2 -->|"applicable deltas merged on top"| SCRIPT
     SCRIPT -->|"writes final result"| M
 ```
 
@@ -297,31 +308,30 @@ sequenceDiagram
     participant REG as GHCR Registry
     participant DC as Dev Container
     participant S3 as S3 Policy Bucket
-    participant CT as CloudTrail
 
     Dev->>VS: Rebuild and Reopen in Container
-    VS->>DD: docker pull claude-base:latest
+    VS->>DD: docker pull claude-base:1.0.0
     DD->>REG: Pull base image (cached if unchanged)
-    Note over DD,REG: Image contains COPY 1 full baseline in /etc/cg-managed-settings/
+    Note over DD,REG: Image contains COPY 1 unified policy + manifest v1.0.0
     REG-->>DD: Image layers (incremental pull)
     DD->>DC: Apply Layer 2 features (java/python/node — cached after first build)
     DC->>DC: Container starts
     DC->>DC: postStartCommand → apply-security-policy.sh
-    DC->>DC: detect_languages() → java, python, node detected
-    DC->>S3: Fetch manifest.json (check deltaFiles count)
-    alt deltaFiles = 0 (initial release / no new controls)
-        S3-->>DC: manifest.json — deltaFiles empty
+    DC->>DC: Read baseline version from manifest.json (e.g. v1.0.0)
+    DC->>S3: Fetch manifest.json (check deltaReleases)
+    alt No deltas > baseline version
+        S3-->>DC: manifest.json — no applicable deltas
         DC->>DC: Use COPY 1 image baseline only
-    else deltaFiles > 0 (new controls released)
-        S3-->>DC: manifest.json + delta settings files
-        DC->>DC: Merge COPY 1 + COPY 2 delta
+    else Deltas found > baseline version
+        S3-->>DC: manifest.json lists delta-1.1.0.json, delta-1.2.0.json
+        DC->>S3: Download each applicable delta file
+        DC->>DC: Merge COPY 1 + deltas in version order
     else S3 unreachable
         DC->>DC: Use COPY 1 image baseline only
         DC->>DC: Log WARN: S3 unreachable
     end
-    DC->>DC: Merge language overlays (java/python/node)
     DC->>DC: Write ~/.claude/settings.json (managed path)
-    DC->>CT: Emit audit event (baselineVersion, deltaVersion, languages)
+    DC->>DC: Emit audit event (baselineVersion, highest delta applied)
     DC-->>VS: Container ready
     VS-->>Dev: Dev Container open (~50 seconds)
 ```
@@ -345,60 +355,25 @@ sequenceDiagram
 
     par COPY 1 — Update image baseline
         CICD->>CICD: Update managed-settings/settings.json
-        CICD->>IMG: Push claude-base:latest with new baseline
-        Note over CICD,IMG: New image is the updated floor
-    and COPY 2 — Update S3 delta
-        CICD->>CICD: Add delta file to layer3-policy/
-        CICD->>CICD: Update manifest.json deltaFiles list
-        CICD->>S3: aws s3 sync layer3-policy/ → latest/
-        Note over CICD,S3: Immediately available — no developer action needed
+        CICD->>CICD: Bump manifest.json version to 1.1.0
+        CICD->>IMG: Push claude-base:1.1.0 with new baseline
+    and COPY 2 — Add versioned delta to S3
+        CICD->>CICD: Create delta-1.1.0.json with new controls only
+        CICD->>CICD: Add entry to manifest.json deltaReleases
+        CICD->>S3: Upload delta-1.1.0.json + updated manifest.json
+        Note over CICD,S3: File is never overwritten — immutable release
     end
 
-    DC->>DC: Developer does Reopen in Container
-    DC->>S3: Fetch manifest — deltaFiles > 0
-    S3-->>DC: Delta settings file with new control
-    DC->>DC: Merge COPY1 + delta → write managed settings
+    DC->>DC: Developer does Reopen in Container (image still v1.0.0)
+    DC->>S3: Fetch manifest — delta-1.1.0 version 1.1.0 > baseline 1.0.0
+    S3-->>DC: delta-1.1.0.json downloaded
+    DC->>DC: Merge baseline + delta → write managed settings
+    Note over DC: Developer gets new control without rebuilding image
 ```
 
 ---
 
-## Phase 8: Multi-Language Architecture
-
-```mermaid
-graph TB
-    subgraph BASE["Layer 1: One Base Image — Full Baseline Policy (COPY 1)"]
-        BI["ghcr.io/ashrujitpal1/devcontainer-feature-cg/claude-base:latest\nnode:20 base + Claude CLI + awscli + policy scripts\n/etc/cg-managed-settings/ — full baseline baked in"]
-    end
-
-    subgraph FEATURES["Layer 2: Developer Picks Capital Group Approved Features"]
-        F1["java:1 v1.0.1\nEclipse Temurin JDK 21/17/11\nMaven + optional Gradle"]
-        F2["python:1 v1.0.1\nPython 3.12/3.11/3.10\ndeadsnakes PPA on Debian Bookworm"]
-        F3["node:1 v1.0.0\nNode.js 22/20/18\nNodeSource repo"]
-        F4["go:1 v1.0.0\nGo 1.22/1.21\ngo.dev direct download"]
-        F5["approved-ide-tools-vscode:1 v1.0.0\ngitleaks + eslint + prettier\nblack + pylint (language-aware)"]
-    end
-
-    subgraph POLICY["Layer 3: Language-Aware Policy Merge at Runtime"]
-        BASE_S["settings.json\nBase deny list, MCP whitelist\nFile isolation, model config"]
-        JAVA_S["settings-java.json\n+ mvn, gradle, javac\n+ /usr/lib/jvm, ~/.m2"]
-        PY_S["settings-python.json\n+ python3, pip, pytest\n+ /usr/lib/python3*, ~/.cache/pip"]
-        NODE_S["settings-node.json\n+ npm, npx, yarn\n+ /usr/local/lib/node_modules"]
-        GO_S["settings-go.json\n+ go, gofmt\n+ /usr/local/go, ~/go"]
-        MERGE["~/.claude/settings.json\nFinal merged result\nWritten at every container start"]
-    end
-
-    BI --> F1 & F2 & F3 & F4 & F5
-    F1 & F2 & F3 & F4 & F5 --> BASE_S
-    BASE_S --> MERGE
-    JAVA_S -->|"if java detected"| MERGE
-    PY_S -->|"if python3 detected"| MERGE
-    NODE_S -->|"if node detected"| MERGE
-    GO_S -->|"if go detected"| MERGE
-```
-
----
-
-## Phase 9: Bedrock IAM Enforcement
+## Phase 8: Bedrock IAM Enforcement
 
 ```mermaid
 graph LR
@@ -429,78 +404,13 @@ graph LR
 
 ---
 
-## Phase 10: Developer Experience
-
-```mermaid
-graph LR
-    subgraph BEFORE["Before"]
-        B1["devcontainer.json\npoints to local Dockerfile"]
-        B2["Builds everything locally\n5-10 minutes"]
-        B3["No security policy"]
-        B4["No automatic updates"]
-    end
-
-    subgraph AFTER["After"]
-        A1["devcontainer.json\npoints to pre-built image\n+ CG approved features"]
-        A2["Image pulled from GHCR\n~50 seconds"]
-        A3["Managed settings enforced\nat every container start"]
-        A4["Policy updates automatic\nno developer action needed"]
-    end
-
-    subgraph UNCHANGED["Developer Workflow — UNCHANGED"]
-        U["VS Code\nDev Containers extension\nRebuild and Reopen in Container\nSame command, same experience"]
-    end
-
-    B1 -.->|"migrates to"| A1
-    B2 -.->|"improves to"| A2
-    B3 -.->|"replaced by"| A3
-    B4 -.->|"replaced by"| A4
-```
-
----
-
-## Phase 11: Rollout Gantt
-
-```mermaid
-gantt
-    title Capital Group Claude Code Rollout
-    dateFormat  YYYY-MM-DD
-
-    section Phase 1 Foundation (COMPLETE)
-    Base image + COPY 1 baseline           :done, p1a, 2025-02-01, 2w
-    S3 bucket + COPY 2 delta setup         :done, p1b, 2025-02-01, 1w
-    apply-security-policy.sh               :done, p1c, after p1b, 1w
-    CG Features published to GHCR          :done, p1d, after p1a, 1w
-    Java + Python validated                :done, p1e, after p1d, 1w
-
-    section Phase 2 Security Controls
-    MCP HTTP Whitelist active              :done, p2a, after p1e, 1w
-    Deny List v1 active                    :done, p2b, after p2a, 1w
-    File System Isolation active           :done, p2c, after p2b, 1w
-    Tool Extension Allowlist               :p2d, after p2c, 1w
-    Bedrock IAM per-developer roles        :p2e, after p1e, 2w
-
-    section Phase 3 Broad Rollout
-    Node + Go templates validated          :p3a, after p2d, 1w
-    Full developer rollout                 :p3b, after p3a, 2w
-    CloudTrail SIEM integration            :p3c, after p3b, 1w
-
-    section Phase 4 Apex Integration
-    Apex gateway deployment                :p4a, after p3c, 4w
-    Outbound proxy enforcement             :p4b, after p4a, 2w
-    Private model routes via Apex          :p4c, after p4b, 1w
-    MCP gateway via Apex                   :p4d, after p4c, 1w
-```
-
----
-
 ## Summary Tables
 
 ### Published Assets (Current State)
 
 | Asset | Registry / Location | Version | Status |
 |---|---|---|---|
-| Base Image | `ghcr.io/ashrujitpal1/devcontainer-feature-cg/claude-base:latest` | latest | ✅ Live |
+| Base Image | `ghcr.io/ashrujitpal1/devcontainer-feature-cg/claude-base:1.0.0` | 1.0.0 | ✅ Live |
 | Java Feature | `ghcr.io/ashrujitpal1/devcontainer-feature-cg/java:1` | 1.0.1 | ✅ Live |
 | Python Feature | `ghcr.io/ashrujitpal1/devcontainer-feature-cg/python:1` | 1.0.1 | ✅ Live |
 | Node Feature | `ghcr.io/ashrujitpal1/devcontainer-feature-cg/node:1` | 1.0.0 | ✅ Live |
@@ -524,7 +434,8 @@ gantt
 | Scenario | Source Used | Result | Audit Log |
 |---|---|---|---|
 | Normal, no new controls | COPY 1 image baseline | Floor policy | `deltaSource=no-delta` |
-| New controls released | COPY 1 + COPY 2 delta | Latest policy | `deltaSource=s3` |
+| New controls released, dev hasn't rebuilt | COPY 1 + all deltas > baseline | Latest policy | `deltaSource=s3` |
+| Dev rebuilt image (latest baseline) | COPY 1 only (no applicable deltas) | Latest policy | `deltaSource=no-delta` |
 | S3 unreachable | COPY 1 image baseline | Floor policy | `deltaSource=no-delta, WARN` |
 
 ### Layer Rebuild Trigger
@@ -537,16 +448,18 @@ gantt
 
 ---
 
-## Key Implementation Notes (Lessons Learned)
+## Key Implementation Notes
 
-1. **log() must write to stderr** — `log()` redirects to `>&2` so log lines never pollute stdout captured by `$()` command substitution in `merge_settings()` and `fetch_delta_policy()`
+1. **log() must write to stderr** — `log()` redirects to `>&2` so log lines never pollute stdout captured by `$()` command substitution.
 
-2. **Directory permissions** — `/etc/cg-managed-settings/` must be `755` (traversable), files `444` (read-only). `chmod -R 444` incorrectly makes the directory untraversable.
+2. **Directory permissions** — `/etc/cg-managed-settings/` must be `755` (traversable), files `444` (read-only).
 
-3. **Java on Debian Bookworm** — `openjdk-21-jdk` is not in default Bookworm apt repo. Use Eclipse Temurin via Adoptium API instead.
+3. **Single unified policy** — All language permissions (java, python, node, go) are in one `settings.json`. Security team maintains one file only.
 
-4. **Python on Debian Bookworm** — `python3.12` requires deadsnakes PPA. Default Bookworm ships Python 3.11.
+4. **Versioned deltas** — Each S3 delta is a separate file (`delta-X.Y.Z.json`), never overwritten. The manifest tracks all releases in `deltaReleases` array.
 
-5. **S3 holds delta only** — S3 is NOT a full copy of the image settings. It holds only new controls added since the last image build. The merge is always `COPY1 + COPY2 delta`.
+5. **Version matching** — Script reads baseline version from image manifest, compares against each delta's version using semver, and only applies deltas with version strictly greater than baseline.
 
-6. **GHCR namespace** — Features publish to `ghcr.io/<github-username>/<repo-name>/<feature-id>`, not `ghcr.io/<org>/features/<feature-id>`.
+6. **Missed updates are caught** — If a developer hasn't rebuilt their image for 3 releases (1.1.0, 1.2.0, 1.3.0), all three deltas are downloaded and merged in order on next container start.
+
+7. **S3 holds delta only** — S3 is NOT a full copy of the image settings. It holds only new controls added since the last image build.

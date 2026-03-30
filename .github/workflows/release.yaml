@@ -41,14 +41,22 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Read baseline version from manifest
+        id: version
+        run: |
+          VERSION=$(jq -r '.version' ./layer1-base-image/managed-settings/manifest.json)
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "Image version: ${VERSION}"
+
       - name: Build and push base image (with COPY 1 baseline settings)
         uses: docker/build-push-action@v5
         with:
           context: ./layer1-base-image
           push: true
           tags: |
-            ghcr.io/capital-group/claude-base:latest
-            ghcr.io/capital-group/claude-base:${{ github.sha }}
+            ghcr.io/${{ github.repository_owner }}/devcontainer-feature-cg/claude-base:latest
+            ghcr.io/${{ github.repository_owner }}/devcontainer-feature-cg/claude-base:${{ steps.version.outputs.version }}
+            ghcr.io/${{ github.repository_owner }}/devcontainer-feature-cg/claude-base:${{ github.sha }}
 
   # ── Publish Layer 3 policy to S3 (COPY 2 — dual delivery) ───────────────────
   publish-policy-s3:
@@ -66,13 +74,12 @@ jobs:
           role-to-assume: ${{ secrets.AWS_POLICY_PUBLISH_ROLE_ARN }}
           aws-region: us-east-1
 
-      - name: Sync Layer 3 policy to S3 (COPY 2)
+      - name: Upload Layer 3 delta policy to S3 (COPY 2 — never delete old deltas)
         run: |
           aws s3 sync ./layer3-policy/ \
             s3://capital-group-claude-policies/latest/ \
-            --delete \
             --no-progress
-          echo "Policy published to S3 — COPY 2 updated"
+          echo "Policy published to S3 — COPY 2 updated (old deltas preserved)"
 
       - name: Verify S3 manifest
         run: |

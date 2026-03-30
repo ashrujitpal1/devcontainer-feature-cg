@@ -21,12 +21,8 @@ devcontainer-feature-cg/
 ├── layer1-base-image/          ← Layer 1: Pre-built base image (CI/CD built)
 │   ├── Dockerfile              ← Builds the base image
 │   ├── managed-settings/       ← COPY 1: Policy floor baked into image
-│   │   ├── manifest.json       ← Baseline version metadata
-│   │   ├── settings.json       ← Base policy (all developers)
-│   │   ├── settings-java.json  ← Java language overlay
-│   │   ├── settings-python.json← Python language overlay
-│   │   ├── settings-node.json  ← Node language overlay
-│   │   └── settings-go.json    ← Go language overlay
+│   │   ├── manifest.json       ← Baseline version metadata (used for version matching)
+│   │   └── settings.json       ← Single unified policy (all languages, all controls)
 │   └── scripts/
 │       ├── apply-security-policy.sh  ← Runs at every container start
 │       └── init-firewall.sh          ← Best-effort egress firewall
@@ -49,8 +45,8 @@ devcontainer-feature-cg/
 │           ├── devcontainer-feature.json  ← Feature metadata (v1.0.0)
 │           └── install.sh                 ← gitleaks, eslint, prettier, black
 │
-├── layer3-policy/              ← Layer 3: S3 delta policy (COPY 2)
-│   └── manifest.json           ← Delta manifest (deltaFiles: [] at v1.0.0)
+├── layer3-policy/              ← Layer 3: S3 versioned delta policy (COPY 2)
+│   └── manifest.json           ← Delta manifest (deltaReleases: [] at v1.0.0)
 │
 ├── developer-templates/        ← What developers copy into their projects
 │   ├── java/
@@ -89,7 +85,7 @@ devcontainer-feature-cg/
 │
 └── .github/
     └── workflows/
-        ├── release.yaml    ← Publishes features + base image + S3 policy
+        ├── release.yaml    ← Publishes features + base image + S3 delta
         ├── test.yaml       ← Tests all features on push/PR
         └── validate.yaml   ← Validates devcontainer-feature.json files
 ```
@@ -115,12 +111,13 @@ What it does NOT include:
 
 ### layer1-base-image/managed-settings/settings.json
 
-The COPY 1 baseline policy. This is the full security policy floor baked into the image.
+The COPY 1 baseline policy. Single unified file covering all languages and all controls.
 
-Current Phase 1 controls:
+Current controls:
+- `permissions.allow` — all approved language tool commands (java, python, node, go and their toolchains)
 - `permissions.deny` — blocks curl, wget, nc, ncat, ssh, scp, rsync
 - `mcpServers.httpWhitelist` — only `https://mcp-gateway.internal.capitalgroup.com/*`
-- `fileSystemIsolation.allowedPaths` — `/workspace`, `/tmp` only
+- `fileSystemIsolation.allowedPaths` — `/workspace`, `/tmp`, plus all language runtime paths
 - `fileSystemIsolation.deniedPaths` — `/root/.aws`, `/etc/shadow`, `/etc/passwd`, `/etc/sudoers`
 - `model.allowedModels` — only `us.anthropic.claude-sonnet-4-6` and `us.anthropic.claude-haiku-3-5`
 
@@ -129,13 +126,15 @@ Current Phase 1 controls:
 The most critical script in the entire system. Runs at every container start via `postStartCommand`.
 
 Flow:
-1. `detect_languages()` — checks for `java`, `python3`, `node`, `go` binaries
-2. `fetch_delta_policy()` — fetches S3 manifest, checks `deltaFiles` count
-3. `merge_settings()` — starts from COPY 1, merges COPY 2 delta if present, then language overlays
+1. `get_baseline_version()` — reads version from `/etc/cg-managed-settings/manifest.json`
+2. `fetch_delta_policy()` — fetches S3 manifest, finds deltas with version > baseline, downloads them
+3. `merge_settings()` — starts from COPY 1, merges applicable S3 deltas in version order
 4. `write_managed_settings()` — writes to `~/.claude/settings.json`
-5. `emit_audit()` — logs audit event with versions and detected languages
+5. `emit_audit()` — logs audit event with baseline version and highest delta applied
 
-**Critical implementation note:** `log()` writes to `stderr` (`>&2`) only. This prevents log lines from being captured by `$()` command substitution when `merge_settings()` and `fetch_delta_policy()` are called.
+**Version matching:** The script compares semver versions. Only delta files with version strictly greater than the image baseline are downloaded and applied. This means if a developer hasn't rebuilt for 3 releases, all 3 missed deltas are applied in order.
+
+**Critical implementation note:** `log()` writes to `stderr` (`>&2`) only. This prevents log lines from being captured by `$()` command substitution.
 
 Environment variables it reads:
 - `SECURITY_POLICY_SOURCE` — `s3` (default) or `local` (skip S3, use image only)
@@ -154,39 +153,20 @@ Best-effort container egress firewall using iptables. Allows outbound traffic on
 
 **Important:** This is defense-in-depth only. A developer with Docker Desktop access can bypass container-level iptables from the host. Apex will be the real enforcement when available.
 
-### src/<feature>/devcontainer-feature.json
-
-Standard Dev Container Feature metadata. Key fields:
-- `id` — feature identifier (used in GHCR path)
-- `version` — semantic version (bump to trigger new publish)
-- `options` — configurable parameters (version, installMaven, etc.)
-- `customizations.vscode.extensions` — VS Code extensions auto-installed with this feature
-- `installsAfter` — ordering hint for feature installation
-
-### src/java/install.sh
-
-Installs Eclipse Temurin JDK via Adoptium API. Uses direct download instead of apt because `openjdk-21-jdk` is not in Debian Bookworm's default apt repository.
-
-Also installs Maven via Apache archive direct download (not apt) for version consistency.
-
-### src/python/install.sh
-
-Installs Python via deadsnakes PPA. Uses `add-apt-repository ppa:deadsnakes/ppa` because `python3.12` is not in Debian Bookworm's default apt repository.
-
 ### layer3-policy/manifest.json
 
-The S3 delta manifest. At v1.0.0 initial release, `deltaFiles` is empty — the image baseline is the full policy.
+The S3 delta manifest. At v1.0.0 initial release, `deltaReleases` is empty — the image baseline is the full policy.
 
 When security team adds new controls:
-1. Add delta settings file (e.g., `settings-delta-v1.1.json`)
-2. Add filename to `deltaFiles` array
-3. Bump `version`
-4. CI/CD syncs to S3
+1. Create a versioned delta file (e.g., `delta-1.1.0.json`) with only the new controls
+2. Add entry to `deltaReleases` array: `{"version": "1.1.0", "file": "delta-1.1.0.json", "releaseDate": "...", "description": "..."}`
+3. Upload delta file + updated manifest to S3
+4. Old delta files are NEVER deleted — they remain for developers on older image versions
 
 ### developer-templates/<stack>/.devcontainer/devcontainer.json
 
 What developers copy into their project repos. Contains:
-- `image` — points to `ghcr.io/ashrujitpal1/devcontainer-feature-cg/claude-base:latest`
+- `image` — points to `ghcr.io/ashrujitpal1/devcontainer-feature-cg/claude-base:1.0.0` (pinned to version)
 - `features` — Capital Group approved features for the language stack
 - `postStartCommand` — `/usr/local/bin/apply-security-policy.sh`
 - `containerEnv` — Bedrock config, S3 bucket reference
@@ -194,10 +174,10 @@ What developers copy into their project repos. Contains:
 
 ### .github/workflows/release.yaml
 
-Triggered on push to `main`. Three parallel jobs:
+Triggered on push to `main`. Three jobs:
 1. `publish-features` — publishes all `src/` features to GHCR via `devcontainers/action`
 2. `publish-base-image` — builds and pushes `layer1-base-image/` to GHCR
-3. `publish-policy-s3` — syncs `layer3-policy/` to S3 (runs after base image build)
+3. `publish-policy-s3` — uploads new delta files + manifest to S3 (never deletes old deltas)
 
 ---
 
@@ -205,7 +185,7 @@ Triggered on push to `main`. Three parallel jobs:
 
 | Feature | GHCR Path | Version | What it installs |
 |---|---|---|---|
-| Base Image | `.../claude-base:latest` | latest | node:20 + Claude CLI + security scripts |
+| Base Image | `.../claude-base:1.0.0` | 1.0.0 | node:20 + Claude CLI + security scripts |
 | Java | `.../java:1` | 1.0.1 | Eclipse Temurin JDK + Maven/Gradle |
 | Python | `.../python:1` | 1.0.1 | Python 3.12 via deadsnakes PPA |
 | Node | `.../node:1` | 1.0.0 | Node.js via NodeSource |
@@ -233,7 +213,7 @@ Triggered on push to `main`. Three parallel jobs:
 
 ## Security Controls Active at v1.0.0
 
-All delivered via COPY 1 (image baseline):
+All delivered via COPY 1 (single unified policy in image baseline):
 
 | Control | Implementation | Status |
 |---|---|---|
@@ -241,6 +221,6 @@ All delivered via COPY 1 (image baseline):
 | Deny List | `permissions.deny` — blocks curl, wget, nc, ssh, scp, rsync | ✅ Active |
 | File System Isolation | `fileSystemIsolation.allowedPaths/deniedPaths` | ✅ Active |
 | Private Model Routes | `model.allowedModels` + Bedrock IAM | ✅ Active |
-| Tool Extension Allowlist | `permissions.allow` per language | ✅ Active |
+| Tool Allowlist | `permissions.allow` — all approved language commands | ✅ Active |
 | Outbound Traffic Proxy | iptables (best-effort) | ⚠️ Best-effort |
 | Apex Controls | Not yet | ⏳ Phase 4 |

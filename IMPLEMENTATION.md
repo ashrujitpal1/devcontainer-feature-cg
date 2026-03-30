@@ -91,7 +91,7 @@ aws s3 ls s3://capital-group-claude-policies/latest/
 aws s3 cp s3://capital-group-claude-policies/latest/manifest.json - | jq .
 ```
 
-Expected: `manifest.json` with `"deltaFiles": []`
+Expected: `manifest.json` with `"deltaReleases": []`
 
 ### Step 6: Login to GHCR
 
@@ -106,23 +106,30 @@ PAT requires scopes: `repo`, `write:packages`, `workflow`
 ```bash
 cd layer1-base-image
 
+# Read version from manifest
+VERSION=$(jq -r '.version' managed-settings/manifest.json)
+
 docker build \
+  -t ghcr.io/<your-github-username>/devcontainer-feature-cg/claude-base:${VERSION} \
   -t ghcr.io/<your-github-username>/devcontainer-feature-cg/claude-base:latest \
   .
 
+docker push ghcr.io/<your-github-username>/devcontainer-feature-cg/claude-base:${VERSION}
 docker push ghcr.io/<your-github-username>/devcontainer-feature-cg/claude-base:latest
 
 cd ..
 ```
 
 Build time: ~3-5 minutes (first time). Subsequent builds use cache.
+The image is tagged with both the version from `manifest.json` (e.g., `1.0.0`) and `latest`.
+Developer templates pin to the version tag; `latest` is kept for CI convenience.
 
 Verify the image works:
 ```bash
 docker run --rm --user root \
   -e CLAUDE_CONFIG_DIR=/root/.claude \
   -e SECURITY_POLICY_SOURCE=local \
-  ghcr.io/<your-github-username>/devcontainer-feature-cg/claude-base:latest \
+  ghcr.io/<your-github-username>/devcontainer-feature-cg/claude-base:1.0.0 \
   /bin/bash -c "/usr/local/bin/apply-security-policy.sh && echo SUCCESS"
 ```
 
@@ -229,7 +236,7 @@ In VS Code:
 3. Press Enter
 
 VS Code will:
-1. Pull `claude-base:latest` from GHCR (~30s first time, instant if cached)
+1. Pull `claude-base:1.0.0` from GHCR (~30s first time, instant if cached)
 2. Install language features (~2-3 min first time, cached after)
 3. Start container
 4. Run `apply-security-policy.sh` (~5s)
@@ -270,7 +277,7 @@ When the security team needs to add a new control:
 **A. Update COPY 1 (image baseline):**
 
 ```bash
-# Edit the base settings file
+# Edit the single unified settings file
 vim layer1-base-image/managed-settings/settings.json
 
 # Example: add a new deny entry
@@ -281,11 +288,11 @@ vim layer1-base-image/managed-settings/manifest.json
 # Change "version": "1.0.0" to "version": "1.1.0"
 ```
 
-**B. Update COPY 2 (S3 delta):**
+**B. Update COPY 2 (S3 versioned delta):**
 
 ```bash
-# Create a delta settings file with ONLY the new control
-cat > layer3-policy/settings-delta.json << 'EOF'
+# Create a versioned delta file with ONLY the new control
+cat > layer3-policy/delta-1.1.0.json << 'EOF'
 {
   "permissions": {
     "deny": [
@@ -295,39 +302,54 @@ cat > layer3-policy/settings-delta.json << 'EOF'
 }
 EOF
 
-# Update the S3 manifest to reference the delta file
+# Add the new release entry to the S3 manifest
 vim layer3-policy/manifest.json
-# Change:
-#   "version": "1.0.0" → "1.1.0"
-#   "deltaFiles": [] → ["settings-delta.json"]
+# Add to deltaReleases array:
+#   {"version": "1.1.0", "file": "delta-1.1.0.json", "releaseDate": "2025-02-01", "description": "Add telnet to deny list"}
 ```
 
 **C. Rebuild base image and push:**
 
 ```bash
 cd layer1-base-image
-docker build -t ghcr.io/<username>/devcontainer-feature-cg/claude-base:latest .
+VERSION=$(jq -r '.version' managed-settings/manifest.json)
+docker build \
+  -t ghcr.io/<username>/devcontainer-feature-cg/claude-base:${VERSION} \
+  -t ghcr.io/<username>/devcontainer-feature-cg/claude-base:latest \
+  .
+docker push ghcr.io/<username>/devcontainer-feature-cg/claude-base:${VERSION}
 docker push ghcr.io/<username>/devcontainer-feature-cg/claude-base:latest
 cd ..
 ```
 
-**D. Sync delta to S3:**
+**D. Update developer templates to reference the new version tag:**
+
+Update the `image` field in all developer templates under `developer-templates/`:
+```json
+"image": "ghcr.io/<username>/devcontainer-feature-cg/claude-base:1.1.0"
+```
+
+**E. Upload delta to S3 (never delete old deltas):**
 
 ```bash
-aws s3 sync ./layer3-policy/ \
-  s3://capital-group-claude-policies/latest/ \
-  --delete \
+# Upload the new delta file and updated manifest
+aws s3 cp ./layer3-policy/delta-1.1.0.json \
+  s3://capital-group-claude-policies/latest/delta-1.1.0.json \
+  --no-progress
+
+aws s3 cp ./layer3-policy/manifest.json \
+  s3://capital-group-claude-policies/latest/manifest.json \
   --no-progress
 
 # Verify
 aws s3 cp s3://capital-group-claude-policies/latest/manifest.json - | jq .
 ```
 
-**E. Commit and push:**
+**F. Commit and push:**
 
 ```bash
 git add -A
-git commit -m "security: add telnet to deny list (Phase 2)"
+git commit -m "security: add telnet to deny list (v1.1.0)"
 git push origin main
 ```
 
@@ -445,7 +467,11 @@ Validates all `devcontainer-feature.json` files for schema compliance.
 
 ### Rebuild base image
 ```bash
-cd layer1-base-image && docker build -t ghcr.io/<user>/devcontainer-feature-cg/claude-base:latest . && docker push ghcr.io/<user>/devcontainer-feature-cg/claude-base:latest
+cd layer1-base-image
+VERSION=$(jq -r '.version' managed-settings/manifest.json)
+docker build -t ghcr.io/<user>/devcontainer-feature-cg/claude-base:${VERSION} -t ghcr.io/<user>/devcontainer-feature-cg/claude-base:latest .
+docker push ghcr.io/<user>/devcontainer-feature-cg/claude-base:${VERSION}
+docker push ghcr.io/<user>/devcontainer-feature-cg/claude-base:latest
 ```
 
 ### Republish a feature
@@ -453,18 +479,20 @@ cd layer1-base-image && docker build -t ghcr.io/<user>/devcontainer-feature-cg/c
 devcontainer features publish --namespace <user>/devcontainer-feature-cg --registry ghcr.io ./src/<feature>
 ```
 
-### Sync policy to S3
+### Upload new delta to S3
 ```bash
-aws s3 sync ./layer3-policy/ s3://capital-group-claude-policies/latest/ --delete
+aws s3 cp ./layer3-policy/delta-X.Y.Z.json s3://capital-group-claude-policies/latest/delta-X.Y.Z.json
+aws s3 cp ./layer3-policy/manifest.json s3://capital-group-claude-policies/latest/manifest.json
 ```
 
 ### Test policy script locally
 ```bash
-docker run --rm --user root -e CLAUDE_CONFIG_DIR=/root/.claude -e SECURITY_POLICY_SOURCE=local ghcr.io/<user>/devcontainer-feature-cg/claude-base:latest /bin/bash -c "/usr/local/bin/apply-security-policy.sh && cat /root/.claude/settings.json | jq ."
+docker run --rm --user root -e CLAUDE_CONFIG_DIR=/root/.claude -e SECURITY_POLICY_SOURCE=local ghcr.io/<user>/devcontainer-feature-cg/claude-base:1.0.0 /bin/bash -c "/usr/local/bin/apply-security-policy.sh && cat /root/.claude/settings.json | jq ."
 ```
 
 ### Check what's in S3
 ```bash
 aws s3 ls s3://capital-group-claude-policies/latest/
 aws s3 cp s3://capital-group-claude-policies/latest/manifest.json - | jq .
+# Shows all versioned delta releases and their files
 ```

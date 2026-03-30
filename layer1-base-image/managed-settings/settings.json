@@ -1,6 +1,30 @@
 {
   "permissions": {
-    "allow": [],
+    "allow": [
+      "Bash(java:*)",
+      "Bash(javac:*)",
+      "Bash(mvn:*)",
+      "Bash(gradle:*)",
+      "Bash(gradlew:*)",
+      "Bash(mvnw:*)",
+      "Bash(python:*)",
+      "Bash(python3:*)",
+      "Bash(pip:*)",
+      "Bash(pip3:*)",
+      "Bash(pytest:*)",
+      "Bash(poetry:*)",
+      "Bash(pipenv:*)",
+      "Bash(node:*)",
+      "Bash(npm:*)",
+      "Bash(npx:*)",
+      "Bash(yarn:*)",
+      "Bash(pnpm:*)",
+      "Bash(tsc:*)",
+      "Bash(go:*)",
+      "Bash(gofmt:*)",
+      "Bash(golint:*)",
+      "Bash(govet:*)"
+    ],
     "deny": [
       "Bash(curl:*)",
       "Bash(wget:*)",
@@ -19,7 +43,17 @@
   "fileSystemIsolation": {
     "allowedPaths": [
       "/workspace",
-      "/tmp"
+      "/tmp",
+      "/usr/lib/jvm",
+      "/root/.m2",
+      "/root/.gradle",
+      "/usr/lib/python3*",
+      "/usr/local/lib/python3*",
+      "/root/.cache/pip",
+      "/usr/local/lib/node_modules",
+      "/usr/local/share/npm-global",
+      "/usr/local/go",
+      "/root/go"
     ],
     "deniedPaths": [
       "/root/.aws",

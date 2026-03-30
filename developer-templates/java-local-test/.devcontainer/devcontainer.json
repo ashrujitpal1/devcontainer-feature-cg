@@ -2,8 +2,8 @@
   "name": "Capital Group — Java (Local Test)",
 
   // Uses locally built base image
-  // Build first: docker build -t ghcr.io/ashrujitpal1/devcontainer-feature-cg/claude-base:latest ./layer1-base-image
-  "image": "ghcr.io/ashrujitpal1/devcontainer-feature-cg/claude-base:latest",
+  // Build first: docker build -t ghcr.io/ashrujitpal1/devcontainer-feature-cg/claude-base:1.0.0 ./layer1-base-image
+  "image": "ghcr.io/ashrujitpal1/devcontainer-feature-cg/claude-base:1.0.0",
 
   // Using standard community features (until CG features are published to GHCR)
   "features": {
