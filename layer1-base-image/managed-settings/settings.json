@@ -62,12 +62,5 @@
       "/etc/sudoers"
     ]
   },
-  "model": {
-    "provider": "bedrock",
-    "defaultModel": "us.anthropic.claude-sonnet-4-6",
-    "allowedModels": [
-      "us.anthropic.claude-sonnet-4-6",
-      "us.anthropic.claude-haiku-3-5"
-    ]
-  }
+  "model": "us.anthropic.claude-sonnet-4-6"
 }
