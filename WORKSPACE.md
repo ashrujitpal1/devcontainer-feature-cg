@@ -40,10 +40,9 @@ devcontainer-feature-cg/
 │   ├── go/
 │   │   ├── devcontainer-feature.json  ← Feature metadata (v1.0.0)
 │   │   └── install.sh                 ← go.dev direct download installer
-│   └── approved-ide-tools/
-│       └── vscode/
-│           ├── devcontainer-feature.json  ← Feature metadata (v1.0.0)
-│           └── install.sh                 ← gitleaks, eslint, prettier, black
+│   └── approved-ide-tools-vscode/
+│       ├── devcontainer-feature.json  ← Feature metadata (v1.0.0)
+│       └── install.sh                 ← gitleaks, eslint, prettier, black
 │
 ├── layer3-policy/              ← Layer 3: S3 versioned delta policy (COPY 2)
 │   └── manifest.json           ← Delta manifest (deltaReleases: [] at v1.0.0)
@@ -78,10 +77,9 @@ devcontainer-feature-cg/
 │   ├── go/
 │   │   ├── scenarios.json
 │   │   └── test.sh
-│   └── approved-ide-tools/
-│       └── vscode/
-│           ├── scenarios.json
-│           └── test.sh
+│   └── approved-ide-tools-vscode/
+│       ├── scenarios.json
+│       └── test.sh
 │
 └── .github/
     └── workflows/
@@ -119,7 +117,7 @@ Current controls:
 - `mcpServers.httpWhitelist` — only `https://mcp-gateway.internal.capitalgroup.com/*`
 - `fileSystemIsolation.allowedPaths` — `/workspace`, `/tmp`, plus all language runtime paths
 - `fileSystemIsolation.deniedPaths` — `/root/.aws`, `/etc/shadow`, `/etc/passwd`, `/etc/sudoers`
-- `model.allowedModels` — only `us.anthropic.claude-sonnet-4-6` and `us.anthropic.claude-haiku-3-5`
+- `model` — `us.anthropic.claude-sonnet-4-6` (default model, string format)
 
 ### layer1-base-image/scripts/sync-security-policy.sh
 
@@ -220,7 +218,7 @@ All delivered via COPY 1 (single unified policy in image baseline):
 | MCP HTTP Whitelist | `mcpServers.httpWhitelist` in settings.json | ✅ Active |
 | Deny List | `permissions.deny` — blocks curl, wget, nc, ssh, scp, rsync | ✅ Active |
 | File System Isolation | `fileSystemIsolation.allowedPaths/deniedPaths` | ✅ Active |
-| Private Model Routes | `model.allowedModels` + Bedrock IAM | ✅ Active |
+| Private Model Routes | `model` string + Bedrock IAM | ✅ Active |
 | Tool Allowlist | `permissions.allow` — all approved language commands | ✅ Active |
 | Outbound Traffic Proxy | iptables (best-effort) | ⚠️ Best-effort |
 | Apex Controls | Not yet | ⏳ Phase 4 |

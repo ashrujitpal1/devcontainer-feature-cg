@@ -168,7 +168,7 @@ devcontainer features publish \
 devcontainer features publish \
   --namespace <your-github-username>/devcontainer-feature-cg \
   --registry ghcr.io \
-  ./src/approved-ide-tools/vscode
+  ./src/approved-ide-tools-vscode
 ```
 
 Each publish outputs the GHCR path and digest. Verify:
@@ -176,15 +176,13 @@ Each publish outputs the GHCR path and digest. Verify:
 docker manifest inspect ghcr.io/<your-github-username>/devcontainer-feature-cg/java:1
 ```
 
-### Step 9: Make GHCR Packages Public
+### Step 9: GHCR Package Visibility
 
-By default GHCR packages are private. Make them public so developers can pull without authentication:
+GHCR packages are private by default. The CI workflows authenticate via `GITHUB_TOKEN` to pull private packages.
+If you need developers to pull without authentication, make packages public:
 
 1. Go to `https://github.com/<your-username>?tab=packages`
-2. For each package (`claude-base`, `java`, `python`, `node`, `go`, `approved-ide-tools-vscode`):
-   - Click the package
-   - Click **Package settings**
-   - Scroll to **Danger Zone** → **Change visibility** → **Public**
+2. For each package: Click → **Package settings** → **Danger Zone** → **Change visibility** → **Public**
 
 ---
 
