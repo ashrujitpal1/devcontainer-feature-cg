@@ -48,12 +48,16 @@
     "SECURITY_POLICY_S3_BUCKET":  "capital-group-claude-policies",
     "SECURITY_POLICY_S3_PREFIX":  "latest",
     "CLAUDE_CODE_ENABLE_TELEMETRY": "1",
+    "OTEL_SERVICE_NAME":          "claude-code",
+    "OTEL_TRACES_EXPORTER":       "otlp",
     "OTEL_METRICS_EXPORTER":      "otlp",
     "OTEL_LOGS_EXPORTER":         "otlp",
     "OTEL_EXPORTER_OTLP_PROTOCOL": "grpc",
     "OTEL_EXPORTER_OTLP_ENDPOINT": "http://localhost:4317",
     "OTEL_METRIC_EXPORT_INTERVAL": "10000",
-    "OTEL_LOGS_EXPORT_INTERVAL":  "5000"
+    "OTEL_LOGS_EXPORT_INTERVAL":  "5000",
+    "OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT": "true",
+    "OTEL_RESOURCE_ATTRIBUTES":   "deployment.environment=dev,service.namespace=capital-group"
   },
   "mounts": [
     "source=cg-bashhistory-${devcontainerId},target=/commandhistory,type=volume",
