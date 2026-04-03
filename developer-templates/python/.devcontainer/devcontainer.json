@@ -5,11 +5,13 @@
     "ghcr.io/ashrujitpal1/devcontainer-feature-cg/python:1": {
       "version": "3.12"
     },
-    "ghcr.io/ashrujitpal1/devcontainer-feature-cg/approved-ide-tools-vscode:1": {}
+    "ghcr.io/ashrujitpal1/devcontainer-feature-cg/approved-ide-tools-vscode:1": {},
+    "ghcr.io/ashrujitpal1/devcontainer-feature-cg/otel-collector:1": {}
   },
   "runArgs": [
     "--cap-add=NET_ADMIN",
-    "--cap-add=NET_RAW"
+    "--cap-add=NET_RAW",
+    "--add-host=host.docker.internal:host-gateway"
   ],
   "customizations": {
     "vscode": {
@@ -43,7 +45,8 @@
     "AWS_REGION":                 "us-east-1",
     "AWS_PROFILE":                "default",
     "SECURITY_POLICY_S3_BUCKET":  "capital-group-claude-policies",
-    "SECURITY_POLICY_S3_PREFIX":  "latest"
+    "SECURITY_POLICY_S3_PREFIX":  "latest",
+    "OTEL_EXPORTER_OTLP_ENDPOINT": "http://localhost:4317"
   },
   "mounts": [
     "source=cg-bashhistory-${devcontainerId},target=/commandhistory,type=volume",

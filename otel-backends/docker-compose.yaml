@@ -1,0 +1,59 @@
+services:
+  # --- Traces backend ---
+  jaeger:
+    image: jaegertracing/all-in-one:latest
+    ports:
+      - "4317:4317"       # OTLP gRPC — OTel Collector exports traces here
+      - "4318:4318"       # OTLP HTTP
+      - "16686:16686"     # Jaeger UI
+    environment:
+      COLLECTOR_OTLP_ENABLED: "true"
+    restart: unless-stopped
+
+  # --- Metrics backend ---
+  prometheus:
+    image: prom/prometheus:v2.54.1
+    ports:
+      - "9090:9090"       # Prometheus UI + Remote Write endpoint
+    volumes:
+      - ./prometheus.yaml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--web.enable-remote-write-receiver"
+      - "--storage.tsdb.retention.time=7d"
+    restart: unless-stopped
+
+  # --- Logs backend ---
+  loki:
+    image: grafana/loki:3.1.1
+    ports:
+      - "3100:3100"       # Loki push API
+    volumes:
+      - loki-data:/loki
+    command: -config.file=/etc/loki/local-config.yaml
+    restart: unless-stopped
+
+  # --- Unified dashboard ---
+  grafana:
+    image: grafana/grafana:11.2.0
+    ports:
+      - "3000:3000"       # Grafana UI
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: admin
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Admin
+    volumes:
+      - ./grafana-datasources.yaml:/etc/grafana/provisioning/datasources/datasources.yaml:ro
+      - grafana-data:/var/lib/grafana
+    depends_on:
+      - jaeger
+      - prometheus
+      - loki
+    restart: unless-stopped
+
+volumes:
+  prometheus-data:
+  loki-data:
+  grafana-data:

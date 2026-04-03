@@ -21,6 +21,7 @@ jobs:
           - node
           - go
           - approved-ide-tools-vscode
+          - otel-collector
         baseImage:
           - ghcr.io/ashrujitpal1/devcontainer-feature-cg/claude-base:latest
     steps:
@@ -53,6 +54,7 @@ jobs:
           - node
           - go
           - approved-ide-tools-vscode
+          - otel-collector
     steps:
       - uses: actions/checkout@v4
 

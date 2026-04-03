@@ -1,0 +1,35 @@
+{
+  "name": "OpenTelemetry Collector (Capital Group Approved)",
+  "id": "otel-collector",
+  "version": "1.0.0",
+  "description": "Installs the OpenTelemetry Collector as an agent sidecar with pre-configured pipelines for traces, metrics, and logs",
+  "options": {
+    "version": {
+      "type": "string",
+      "default": "0.149.0",
+      "description": "OpenTelemetry Collector version to install"
+    },
+    "jaegerOtlpEndpoint": {
+      "type": "string",
+      "default": "http://host.docker.internal:4317",
+      "description": "Jaeger OTLP gRPC endpoint for trace export"
+    },
+    "prometheusRemoteWriteEndpoint": {
+      "type": "string",
+      "default": "http://host.docker.internal:9090/api/v1/write",
+      "description": "Prometheus Remote Write endpoint for metric export"
+    },
+    "logFilePath": {
+      "type": "string",
+      "default": "/var/log/otelcol/app.log",
+      "description": "Local file path for log export"
+    },
+    "lokiEndpoint": {
+      "type": "string",
+      "default": "http://host.docker.internal:3100/loki/api/v1/push",
+      "description": "Loki endpoint for log export"
+    }
+  },
+  "entrypoint": "/usr/local/bin/start-otel-collector.sh",
+  "installsAfter": []
+}

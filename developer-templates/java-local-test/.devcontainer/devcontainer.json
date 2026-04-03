@@ -11,12 +11,14 @@
       "version": "21",
       "installMaven": "true",
       "installGradle": "false"
-    }
+    },
+    "ghcr.io/ashrujitpal1/devcontainer-feature-cg/otel-collector:1": {}
   },
 
   "runArgs": [
     "--cap-add=NET_ADMIN",
-    "--cap-add=NET_RAW"
+    "--cap-add=NET_RAW",
+    "--add-host=host.docker.internal:host-gateway"
   ],
 
   "customizations": {
@@ -51,7 +53,8 @@
     "AWS_PROFILE":                    "default",
     // Layer 3: set to local so sync-security-policy.sh uses image baseline (COPY 1)
     // Change to "s3" once S3 bucket is set up
-    "SECURITY_POLICY_SOURCE":         "local"
+    "SECURITY_POLICY_SOURCE":         "local",
+    "OTEL_EXPORTER_OTLP_ENDPOINT":    "http://localhost:4317"
   },
 
   "mounts": [

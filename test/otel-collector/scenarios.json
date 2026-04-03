@@ -1,0 +1,19 @@
+{
+  "basic": {
+    "image": "ghcr.io/ashrujitpal1/devcontainer-feature-cg/claude-base:latest",
+    "features": {
+      "otel-collector": {}
+    }
+  },
+  "custom-endpoints": {
+    "image": "ghcr.io/ashrujitpal1/devcontainer-feature-cg/claude-base:latest",
+    "features": {
+      "otel-collector": {
+        "version": "0.149.0",
+        "jaegerOtlpEndpoint": "http://jaeger:4317",
+        "prometheusRemoteWriteEndpoint": "http://prometheus:9090/api/v1/write",
+        "logFilePath": "/tmp/otel-logs/app.log"
+      }
+    }
+  }
+}
