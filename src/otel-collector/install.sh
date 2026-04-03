@@ -45,6 +45,9 @@ receivers:
       http:
         endpoint: 0.0.0.0:4318
 
+processors:
+  deltatocumulative:
+
 exporters:
   otlp/jaeger:
     endpoint: ${JAEGER_OTLP_ENDPOINT}
@@ -69,6 +72,7 @@ service:
       exporters: [otlp/jaeger]
     metrics:
       receivers: [otlp]
+      processors: [deltatocumulative]
       exporters: [prometheusremotewrite]
     logs:
       receivers: [otlp]
