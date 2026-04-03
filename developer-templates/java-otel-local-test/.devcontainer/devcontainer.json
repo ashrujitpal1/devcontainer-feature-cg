@@ -19,5 +19,5 @@
     "SECURITY_POLICY_SOURCE": "local"
   },
   "remoteUser": "root",
-  "postStartCommand": "/usr/local/bin/start-otel-collector.sh || true"
+  "postStartCommand": "/usr/local/bin/start-otel-collector.sh && /usr/local/bin/sync-security-policy.sh"
 }

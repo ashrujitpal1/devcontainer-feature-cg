@@ -81,7 +81,7 @@
 
   // Layer 3: applies security policy at every container start
   // Uses image baseline (COPY 1) since S3 not set up yet
-  "postStartCommand": "/usr/local/bin/sync-security-policy.sh",
+  "postStartCommand": "/usr/local/bin/start-otel-collector.sh && /usr/local/bin/sync-security-policy.sh",
   "waitFor": "postStartCommand",
 
   "hostRequirements": {

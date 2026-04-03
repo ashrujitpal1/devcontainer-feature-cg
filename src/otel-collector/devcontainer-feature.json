@@ -30,6 +30,5 @@
       "description": "Loki OTLP endpoint for log export"
     }
   },
-  "entrypoint": "/usr/local/bin/start-otel-collector.sh",
   "installsAfter": []
 }
