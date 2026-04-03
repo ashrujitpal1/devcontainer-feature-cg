@@ -54,7 +54,13 @@
     // Layer 3: set to local so sync-security-policy.sh uses image baseline (COPY 1)
     // Change to "s3" once S3 bucket is set up
     "SECURITY_POLICY_SOURCE":         "local",
-    "OTEL_EXPORTER_OTLP_ENDPOINT":    "http://localhost:4317"
+    "CLAUDE_CODE_ENABLE_TELEMETRY":    "1",
+    "OTEL_METRICS_EXPORTER":           "otlp",
+    "OTEL_LOGS_EXPORTER":              "otlp",
+    "OTEL_EXPORTER_OTLP_PROTOCOL":     "grpc",
+    "OTEL_EXPORTER_OTLP_ENDPOINT":     "http://localhost:4317",
+    "OTEL_METRIC_EXPORT_INTERVAL":     "10000",
+    "OTEL_LOGS_EXPORT_INTERVAL":       "5000"
   },
 
   "mounts": [
