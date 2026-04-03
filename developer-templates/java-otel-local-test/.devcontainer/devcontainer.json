@@ -1,0 +1,23 @@
+{
+  "name": "Capital Group — Java + OTel (Local Test)",
+  "image": "ghcr.io/ashrujitpal1/devcontainer-feature-cg/claude-base:1.0.0",
+  "features": {
+    "ghcr.io/devcontainers/features/java:1": {
+      "version": "21",
+      "installMaven": "true",
+      "installGradle": "false"
+    },
+    "./otel-collector": {}
+  },
+  "runArgs": [
+    "--cap-add=NET_ADMIN",
+    "--cap-add=NET_RAW",
+    "--add-host=host.docker.internal:host-gateway"
+  ],
+  "containerEnv": {
+    "OTEL_EXPORTER_OTLP_ENDPOINT": "http://localhost:4317",
+    "SECURITY_POLICY_SOURCE": "local"
+  },
+  "remoteUser": "root",
+  "postStartCommand": "/usr/local/bin/start-otel-collector.sh || true"
+}

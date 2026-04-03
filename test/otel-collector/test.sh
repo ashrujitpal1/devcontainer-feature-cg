@@ -11,6 +11,6 @@ check "config has otlp receiver" grep -q "otlp:" /etc/otelcol/config.yaml
 check "config has traces pipeline" grep -q "traces:" /etc/otelcol/config.yaml
 check "config has metrics pipeline" grep -q "metrics:" /etc/otelcol/config.yaml
 check "config has logs pipeline" grep -q "logs:" /etc/otelcol/config.yaml
-check "config has loki exporter" grep -q "loki:" /etc/otelcol/config.yaml
+check "config has loki exporter" grep -q "otlphttp/loki" /etc/otelcol/config.yaml
 
 reportResults
